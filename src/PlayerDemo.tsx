@@ -65,6 +65,15 @@ export const PlayerDemo: React.FC = () => {
           setLoadingProgress(prev => ({ ...prev, [index]: 0 }));
         });
 
+        // Also prefetch the background audio
+        const audioUrl = videoUrls[0].startsWith('/api/videos/') 
+          ? '/api/videos/EVOE%20-%20Pearl.mp3'
+          : 'https://tribute-video-assets.tribute.co/EVOE%20-%20Pearl.mp3';
+        
+        const audioPrefetch = prefetch(audioUrl, {
+          method: 'blob-url',
+        });
+
         // Then, prefetch all videos with progress tracking
         const prefetchPromises = videoUrls.map((url, index) => {
           const { waitUntilDone } = prefetch(url, {
@@ -81,7 +90,8 @@ export const PlayerDemo: React.FC = () => {
           return waitUntilDone();
         });
 
-        await Promise.all(prefetchPromises);
+        // Wait for videos and audio to prefetch
+        await Promise.all([...prefetchPromises, audioPrefetch.waitUntilDone()]);
         
         // Ensure all show 100% before completing
         if (mounted) {
