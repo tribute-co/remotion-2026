@@ -3,8 +3,8 @@ import { VideoSequence } from './VideoSequence';
 
 export const PlayerDemo: React.FC = () => {
   return (
-    <div style={{ 
-      display: 'flex', 
+    <div style={{
+      display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'center',
@@ -13,15 +13,15 @@ export const PlayerDemo: React.FC = () => {
       padding: '2rem',
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
     }}>
-      <h1 style={{ 
-        color: '#fff', 
+      <h1 style={{
+        color: '#fff',
         marginBottom: '2rem',
         fontSize: '2.5rem',
         fontWeight: 'bold'
       }}>
         Remotion Player Demo
       </h1>
-      
+
       <div style={{
         maxWidth: '1280px',
         width: '100%',
@@ -39,32 +39,12 @@ export const PlayerDemo: React.FC = () => {
           style={{
             width: '100%',
             height: '100%',
+            outline: 'none',
           }}
           controls
           loop
+          autoPlay={false}
         />
-      </div>
-
-      <div style={{ 
-        color: '#888', 
-        marginTop: '2rem',
-        textAlign: 'center',
-        maxWidth: '600px'
-      }}>
-        <p style={{ marginBottom: '1rem' }}>
-          Playing 3 videos in sequence:
-        </p>
-        <ul style={{ 
-          listStyle: 'none', 
-          padding: 0,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '0.5rem'
-        }}>
-          <li>🦥 Sloth on Train</li>
-          <li>🐴 Mongolian Horses 4K</li>
-          <li>✨ Magical Ink</li>
-        </ul>
       </div>
     </div>
   );

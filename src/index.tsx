@@ -1,6 +1,6 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import { PlayerDemo } from './Player';
+import { PlayerDemo } from './PlayerDemo';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) throw new Error('Root element not found');

@@ -1,4 +1,5 @@
-import { AbsoluteFill, Sequence, Video, staticFile } from 'remotion';
+import { AbsoluteFill, Sequence } from 'remotion';
+import { Video } from '@remotion/media';
 
 const videos = [
   {
