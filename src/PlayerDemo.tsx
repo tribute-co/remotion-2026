@@ -4,11 +4,26 @@ import { prefetch } from 'remotion';
 import { VideoSequence, VideoWithDuration } from './VideoSequence';
 import { getVideoMetadata } from './get-video-metadata';
 
-const videoUrls = [
-  'https://tribute-video-assets.tribute.co/sloth_on_train.mp4',
-  'https://tribute-video-assets.tribute.co/mongolian_horses_4k.mp4',
-  'https://tribute-video-assets.tribute.co/magical_ink.mp4',
-];
+// Use proxy in production, direct URLs in development
+const getVideoUrls = () => {
+  const isProduction = typeof window !== 'undefined' && window.location.hostname !== 'localhost';
+  
+  if (isProduction) {
+    return [
+      '/api/videos/sloth_on_train.mp4',
+      '/api/videos/mongolian_horses_4k.mp4',
+      '/api/videos/magical_ink.mp4',
+    ];
+  }
+  
+  return [
+    'https://tribute-video-assets.tribute.co/sloth_on_train.mp4',
+    'https://tribute-video-assets.tribute.co/mongolian_horses_4k.mp4',
+    'https://tribute-video-assets.tribute.co/magical_ink.mp4',
+  ];
+};
+
+const videoUrls = getVideoUrls();
 
 export const PlayerDemo: React.FC = () => {
   const [videos, setVideos] = useState<VideoWithDuration[] | null>(null);
