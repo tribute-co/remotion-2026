@@ -35,12 +35,6 @@ bun run dev
 
 Then open your browser to `http://localhost:3000` to view the player.
 
-For the Remotion Studio (advanced editing and previewing compositions):
-
-```bash
-bun run remotion
-```
-
 ### Building
 
 Build for production:
@@ -51,23 +45,24 @@ bun run build
 
 The output will be in the `dist/` directory.
 
-### Rendering
+### Preview
 
-Render the composition to a video file:
+Preview the production build locally:
 
 ```bash
-bun run render
+bun run preview
 ```
 
 ## Project Structure
 
 - `src/`
   - `index.tsx` - Entry point
-  - `Player.tsx` - Player component with UI
+  - `PlayerDemo.tsx` - Player component with UI and preloading
   - `VideoSequence.tsx` - Composition with sequential videos
+  - `get-video-metadata.ts` - Mediabunny metadata helper
   - `Root.tsx` - Remotion root configuration
 - `index.html` - HTML entry point
-- `remotion.config.ts` - Remotion configuration
+- `vite.config.ts` - Vite configuration
 - `package.json` - Dependencies and scripts
 
 ## Technologies

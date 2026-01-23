@@ -6,17 +6,16 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview",
-    "remotion": "remotion studio",
-    "render": "remotion render VideoSequence out/video.mp4"
+    "preview": "vite preview"
   },
   "dependencies": {
+    "@remotion/media": "^4.0.0",
+    "@remotion/player": "^4.0.0",
+    "@remotion/transitions": "^4.0.409",
+    "mediabunny": "^1.30.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "remotion": "^4.0.0",
-    "@remotion/player": "^4.0.0",
-    "@remotion/media": "^4.0.0",
-    "mediabunny": "^1.30.1"
+    "remotion": "^4.0.0"
   },
   "devDependencies": {
     "@types/react": "^18.3.0",
