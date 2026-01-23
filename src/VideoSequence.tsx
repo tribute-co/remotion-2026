@@ -1,22 +1,16 @@
 import { AbsoluteFill, Sequence } from 'remotion';
 import { Video } from '@remotion/media';
 
-const videos = [
-  {
-    src: 'https://tribute-video-assets.tribute.co/sloth_on_train.mp4',
-    durationInFrames: 300, // ~10 seconds at 30fps
-  },
-  {
-    src: 'https://tribute-video-assets.tribute.co/mongolian_horses_4k.mp4',
-    durationInFrames: 300,
-  },
-  {
-    src: 'https://tribute-video-assets.tribute.co/magical_ink.mp4',
-    durationInFrames: 300,
-  },
-];
+export interface VideoWithDuration {
+  src: string;
+  durationInFrames: number;
+}
 
-export const VideoSequence: React.FC = () => {
+export interface VideoSequenceProps {
+  videos: VideoWithDuration[];
+}
+
+export const VideoSequence: React.FC<VideoSequenceProps> = ({ videos }) => {
   let currentFrame = 0;
 
   return (
@@ -35,6 +29,7 @@ export const VideoSequence: React.FC = () => {
                   height: '100%',
                   objectFit: 'cover',
                 }}
+                pauseWhenBuffering
               />
             </AbsoluteFill>
           </Sequence>

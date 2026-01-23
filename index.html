@@ -15,13 +15,14 @@
       margin: 0;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
     }
-    /* Remove focus outline on Remotion Player controls */
-    button:focus-visible {
-      outline: 2px solid rgba(59, 130, 246, 0.5);
-      outline-offset: 2px;
+    /* Aggressively remove focus-visible outline */
+    *:focus-visible {
+      outline: none !important;
     }
-    button:focus:not(:focus-visible) {
-      outline: none;
+    button:focus,
+    button:focus-visible {
+      outline: none !important;
+      box-shadow: none !important;
     }
   </style>
 </head>
