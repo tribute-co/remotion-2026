@@ -30,6 +30,7 @@ export const PlayerDemo: React.FC = () => {
   const [totalDuration, setTotalDuration] = useState<number | null>(null);
   const [loadingProgress, setLoadingProgress] = useState<{[key: number]: number}>({});
   const [allPrefetched, setAllPrefetched] = useState(false);
+  const [startedLoading, setStartedLoading] = useState(false);
   const fps = 30;
 
   useEffect(() => {
@@ -37,6 +38,8 @@ export const PlayerDemo: React.FC = () => {
 
     const calculateDurationsAndPrefetch = async () => {
       try {
+        setStartedLoading(true);
+        
         // First, get metadata
         const metadataPromises = videoUrls.map(url => getVideoMetadata(url));
         const allMetadata = await Promise.all(metadataPromises);
@@ -57,14 +60,21 @@ export const PlayerDemo: React.FC = () => {
         setVideos(videosWithDurations);
         setTotalDuration(totalFrames);
 
+        // Simulate minimum progress for better UX
+        videoUrls.forEach((_, index) => {
+          setLoadingProgress(prev => ({ ...prev, [index]: 0 }));
+        });
+
         // Then, prefetch all videos with progress tracking
         const prefetchPromises = videoUrls.map((url, index) => {
           const { waitUntilDone } = prefetch(url, {
             method: 'blob-url',
-            onProgress: ({ loaded, total }) => {
-              if (total) {
-                const percent = Math.round((loaded / total) * 100);
-                setLoadingProgress(prev => ({ ...prev, [index]: percent }));
+            onProgress: (progress) => {
+              if (mounted) {
+                const percent = Math.round((progress.downloaded / progress.totalBytes) * 100);
+                if (!isNaN(percent)) {
+                  setLoadingProgress(prev => ({ ...prev, [index]: percent }));
+                }
               }
             },
           });
@@ -73,7 +83,14 @@ export const PlayerDemo: React.FC = () => {
 
         await Promise.all(prefetchPromises);
         
+        // Ensure all show 100% before completing
         if (mounted) {
+          videoUrls.forEach((_, index) => {
+            setLoadingProgress(prev => ({ ...prev, [index]: 100 }));
+          });
+          
+          // Small delay to show 100% state
+          await new Promise(resolve => setTimeout(resolve, 300));
           setAllPrefetched(true);
         }
       } catch (error) {
@@ -106,11 +123,13 @@ export const PlayerDemo: React.FC = () => {
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        minHeight: '100vh',
+        minHeight: '100dvh',
+        height: '100dvh',
         backgroundColor: '#1a1a1a',
         color: '#fff',
         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-        padding: '2rem'
+        padding: '2rem',
+        boxSizing: 'border-box'
       }}>
         <div style={{ textAlign: 'center', maxWidth: '500px', width: '100%' }}>
           <h2 style={{ marginBottom: '2rem' }}>Loading videos...</h2>
@@ -146,20 +165,13 @@ export const PlayerDemo: React.FC = () => {
       flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'center',
-      minHeight: '100vh',
+      minHeight: '100dvh',
+      height: '100dvh',
       backgroundColor: '#1a1a1a',
       padding: '2rem',
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+      boxSizing: 'border-box'
     }}>
-      <h1 style={{
-        color: '#fff',
-        marginBottom: '2rem',
-        fontSize: '2.5rem',
-        fontWeight: 'bold'
-      }}>
-        Remotion Player Demo
-      </h1>
-
       <div style={{
         maxWidth: '1280px',
         width: '100%',
