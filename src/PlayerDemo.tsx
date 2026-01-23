@@ -1,5 +1,6 @@
 import { Player } from '@remotion/player';
 import { useEffect, useState } from 'react';
+import { prefetch } from 'remotion';
 import { VideoSequence, VideoWithDuration } from './VideoSequence';
 import { getVideoMetadata } from './get-video-metadata';
 
@@ -12,13 +13,16 @@ const videoUrls = [
 export const PlayerDemo: React.FC = () => {
   const [videos, setVideos] = useState<VideoWithDuration[] | null>(null);
   const [totalDuration, setTotalDuration] = useState<number | null>(null);
+  const [loadingProgress, setLoadingProgress] = useState<{[key: number]: number}>({});
+  const [allPrefetched, setAllPrefetched] = useState(false);
   const fps = 30;
 
   useEffect(() => {
     let mounted = true;
 
-    const calculateDurations = async () => {
+    const calculateDurationsAndPrefetch = async () => {
       try {
+        // First, get metadata
         const metadataPromises = videoUrls.map(url => getVideoMetadata(url));
         const allMetadata = await Promise.all(metadataPromises);
         
@@ -37,36 +41,85 @@ export const PlayerDemo: React.FC = () => {
         
         setVideos(videosWithDurations);
         setTotalDuration(totalFrames);
-      } catch (error) {
-        console.error('Error calculating duration:', error);
-        // Fallback to default if there's an error
+
+        // Then, prefetch all videos with progress tracking
+        const prefetchPromises = videoUrls.map((url, index) => {
+          const { waitUntilDone } = prefetch(url, {
+            method: 'blob-url',
+            onProgress: ({ loaded, total }) => {
+              if (total) {
+                const percent = Math.round((loaded / total) * 100);
+                setLoadingProgress(prev => ({ ...prev, [index]: percent }));
+              }
+            },
+          });
+          return waitUntilDone();
+        });
+
+        await Promise.all(prefetchPromises);
+        
         if (mounted) {
-          setTotalDuration(900);
+          setAllPrefetched(true);
+        }
+      } catch (error) {
+        console.error('Error loading videos:', error);
+        // Still show player even if prefetch fails
+        if (mounted) {
+          setAllPrefetched(true);
+          if (!totalDuration) {
+            setTotalDuration(900);
+          }
         }
       }
     };
 
-    calculateDurations();
+    calculateDurationsAndPrefetch();
 
     return () => {
       mounted = false;
     };
   }, []);
 
-  if (!totalDuration || !videos) {
+  if (!totalDuration || !videos || !allPrefetched) {
+    const overallProgress = Object.keys(loadingProgress).length > 0
+      ? Math.round(Object.values(loadingProgress).reduce((a, b) => a + b, 0) / videoUrls.length)
+      : 0;
+
     return (
       <div style={{
         display: 'flex',
+        flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
         minHeight: '100vh',
         backgroundColor: '#1a1a1a',
         color: '#fff',
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        padding: '2rem'
       }}>
-        <div style={{ textAlign: 'center' }}>
-          <h2>Loading videos...</h2>
-          <p style={{ color: '#888', marginTop: '1rem' }}>Calculating durations with Mediabunny</p>
+        <div style={{ textAlign: 'center', maxWidth: '500px', width: '100%' }}>
+          <h2 style={{ marginBottom: '2rem' }}>Loading videos...</h2>
+          
+          <div style={{
+            width: '100%',
+            height: '8px',
+            backgroundColor: '#333',
+            borderRadius: '4px',
+            overflow: 'hidden',
+            marginBottom: '1rem'
+          }}>
+            <div style={{
+              width: `${overallProgress}%`,
+              height: '100%',
+              backgroundColor: '#3b82f6',
+              transition: 'width 0.3s ease',
+              borderRadius: '4px'
+            }} />
+          </div>
+          
+          <p style={{ color: '#888', fontSize: '0.9rem' }}>
+            {overallProgress}% complete
+          </p>
         </div>
       </div>
     );
