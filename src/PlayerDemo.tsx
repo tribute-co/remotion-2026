@@ -1,32 +1,22 @@
 import { Player } from '@remotion/player';
 import { useEffect, useState } from 'react';
 import { prefetch } from 'remotion';
-import { VideoSequence, VideoWithDuration } from './VideoSequence';
+import { VideoSequence, MediaItem } from './VideoSequence';
 import { getVideoMetadata } from './get-video-metadata';
+import { mediaAssets } from './media-schema';
 
 // Use proxy in production, direct URLs in development
-const getVideoUrls = () => {
+const getMediaUrls = () => {
   const isProduction = typeof window !== 'undefined' && window.location.hostname !== 'localhost';
   
-  if (isProduction) {
-    return [
-      '/api/videos/sloth_on_train.mp4',
-      '/api/videos/mongolian_horses_4k.mp4',
-      '/api/videos/magical_ink.mp4',
-    ];
-  }
-  
-  return [
-    'https://tribute-video-assets.tribute.co/sloth_on_train.mp4',
-    'https://tribute-video-assets.tribute.co/mongolian_horses_4k.mp4',
-    'https://tribute-video-assets.tribute.co/magical_ink.mp4',
-  ];
+  // For now, use direct URLs (we can add proxy logic later if needed)
+  return mediaAssets;
 };
 
-const videoUrls = getVideoUrls();
+const mediaItems = getMediaUrls();
 
 export const PlayerDemo: React.FC = () => {
-  const [videos, setVideos] = useState<VideoWithDuration[] | null>(null);
+  const [media, setMedia] = useState<MediaItem[] | null>(null);
   const [totalDuration, setTotalDuration] = useState<number | null>(null);
   const [loadingProgress, setLoadingProgress] = useState<{[key: number]: number}>({});
   const [allPrefetched, setAllPrefetched] = useState(false);
@@ -40,47 +30,56 @@ export const PlayerDemo: React.FC = () => {
       try {
         setStartedLoading(true);
         
-        // First, get metadata
-        const metadataPromises = videoUrls.map(url => getVideoMetadata(url));
-        const allMetadata = await Promise.all(metadataPromises);
+        // Process all media assets
+        const mediaWithDurations: MediaItem[] = await Promise.all(
+          mediaItems.map(async (asset, index) => {
+            if (asset.type === 'video') {
+              const metadata = await getVideoMetadata(asset.src);
+              // Ensure minimum duration of 30 frames (1 second) for transitions
+              const durationInFrames = Math.max(30, Math.ceil(metadata.durationInSeconds * fps));
+              return {
+                type: 'video' as const,
+                src: asset.src,
+                durationInFrames,
+              };
+            } else {
+              // For images, use the specified duration (minimum 1 second to ensure it's longer than transitions)
+              const durationInFrames = Math.max(30, Math.ceil((asset.durationInSeconds || 3) * fps));
+              return {
+                type: 'image' as const,
+                src: asset.src,
+                durationInFrames,
+              };
+            }
+          })
+        );
         
         if (!mounted) return;
 
-        const videosWithDurations = videoUrls.map((src, index) => {
-          const metadata = allMetadata[index];
-          const durationInFrames = Math.ceil(metadata.durationInSeconds * fps);
-          return {
-            src,
-            durationInFrames,
-          };
-        });
-
-        const totalFrames = videosWithDurations.reduce((sum, v) => sum + v.durationInFrames, 0);
+        const totalFrames = mediaWithDurations.reduce((sum, m) => sum + m.durationInFrames, 0);
         
-        setVideos(videosWithDurations);
+        setMedia(mediaWithDurations);
         setTotalDuration(totalFrames);
 
         // Simulate minimum progress for better UX
-        videoUrls.forEach((_, index) => {
+        mediaItems.forEach((_, index) => {
           setLoadingProgress(prev => ({ ...prev, [index]: 0 }));
         });
 
         // Also prefetch the background audio
-        const audioUrl = videoUrls[0].startsWith('/api/videos/') 
-          ? '/api/videos/EVOE%20-%20Pearl.mp3'
-          : 'https://tribute-video-assets.tribute.co/EVOE%20-%20Pearl.mp3';
+        const audioUrl = 'https://tribute-video-assets.tribute.co/EVOE%20-%20Pearl.mp3';
         
         const audioPrefetch = prefetch(audioUrl, {
           method: 'blob-url',
         });
 
-        // Then, prefetch all videos with progress tracking
-        const prefetchPromises = videoUrls.map((url, index) => {
-          const { waitUntilDone } = prefetch(url, {
+        // Then, prefetch all media with progress tracking
+        const prefetchPromises = mediaItems.map((asset, index) => {
+          const { waitUntilDone } = prefetch(asset.src, {
             method: 'blob-url',
             onProgress: (progress) => {
-              if (mounted) {
-                const percent = Math.round((progress.downloaded / progress.totalBytes) * 100);
+              if (mounted && progress.totalBytes) {
+                const percent = Math.round((progress.loadedBytes / progress.totalBytes) * 100);
                 if (!isNaN(percent)) {
                   setLoadingProgress(prev => ({ ...prev, [index]: percent }));
                 }
@@ -90,12 +89,12 @@ export const PlayerDemo: React.FC = () => {
           return waitUntilDone();
         });
 
-        // Wait for videos and audio to prefetch
+        // Wait for media and audio to prefetch
         await Promise.all([...prefetchPromises, audioPrefetch.waitUntilDone()]);
         
         // Ensure all show 100% before completing
         if (mounted) {
-          videoUrls.forEach((_, index) => {
+          mediaItems.forEach((_, index) => {
             setLoadingProgress(prev => ({ ...prev, [index]: 100 }));
           });
           
@@ -104,7 +103,7 @@ export const PlayerDemo: React.FC = () => {
           setAllPrefetched(true);
         }
       } catch (error) {
-        console.error('Error loading videos:', error);
+        console.error('Error loading media:', error);
         // Still show player even if prefetch fails
         if (mounted) {
           setAllPrefetched(true);
@@ -122,9 +121,9 @@ export const PlayerDemo: React.FC = () => {
     };
   }, []);
 
-  if (!totalDuration || !videos || !allPrefetched) {
+  if (!totalDuration || !media || !allPrefetched) {
     const overallProgress = Object.keys(loadingProgress).length > 0
-      ? Math.round(Object.values(loadingProgress).reduce((a, b) => a + b, 0) / videoUrls.length)
+      ? Math.round(Object.values(loadingProgress).reduce((a, b) => a + b, 0) / mediaItems.length)
       : 0;
 
     return (
@@ -142,7 +141,7 @@ export const PlayerDemo: React.FC = () => {
         boxSizing: 'border-box'
       }}>
         <div style={{ textAlign: 'center', maxWidth: '500px', width: '100%' }}>
-          <h2 style={{ marginBottom: '2rem' }}>Loading videos...</h2>
+          <h2 style={{ marginBottom: '2rem' }}>Loading media...</h2>
           
           <div style={{
             width: '100%',
@@ -203,7 +202,7 @@ export const PlayerDemo: React.FC = () => {
           }}
           controls
           autoPlay={false}
-          inputProps={{ videos }}
+          inputProps={{ media }}
         />
       </div>
     </div>

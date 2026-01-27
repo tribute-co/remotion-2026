@@ -1,12 +1,7 @@
 import { Composition } from 'remotion';
-import { VideoSequence, VideoWithDuration } from './VideoSequence';
+import { VideoSequence, MediaItem, VideoSequenceProps } from './VideoSequence';
 import { getVideoMetadata } from './get-video-metadata';
-
-const videoUrls = [
-  'https://tribute-video-assets.tribute.co/sloth_on_train.mp4',
-  'https://tribute-video-assets.tribute.co/mongolian_horses_4k.mp4',
-  'https://tribute-video-assets.tribute.co/magical_ink.mp4',
-];
+import { mediaAssets } from './media-schema';
 
 export const RemotionRoot: React.FC = () => {
   return (
@@ -19,27 +14,40 @@ export const RemotionRoot: React.FC = () => {
         width={1920}
         height={1080}
         defaultProps={{
-          videos: [] as VideoWithDuration[],
+          media: [] as MediaItem[],
         }}
-        calculateMetadata={async ({ fps }) => {
-          const metadataPromises = videoUrls.map(url => getVideoMetadata(url));
-          const allMetadata = await Promise.all(metadataPromises);
-          
-          const videosWithDurations = videoUrls.map((src, index) => {
-            const metadata = allMetadata[index];
-            const durationInFrames = Math.ceil(metadata.durationInSeconds * fps);
-            return {
-              src,
-              durationInFrames,
-            };
-          });
+        calculateMetadata={async ({ props, defaultProps }) => {
+          const fps = 30;
+          // Process all media assets
+          const mediaWithDurations: MediaItem[] = await Promise.all(
+            mediaAssets.map(async (asset) => {
+              if (asset.type === 'video') {
+                const metadata = await getVideoMetadata(asset.src);
+                // Ensure minimum duration of 30 frames (1 second) for transitions
+                const durationInFrames = Math.max(30, Math.ceil(metadata.durationInSeconds * fps));
+                return {
+                  type: 'video' as const,
+                  src: asset.src,
+                  durationInFrames,
+                };
+              } else {
+                // For images, use the specified duration (minimum 1 second to ensure it's longer than transitions)
+                const durationInFrames = Math.max(30, Math.ceil((asset.durationInSeconds || 3) * fps));
+                return {
+                  type: 'image' as const,
+                  src: asset.src,
+                  durationInFrames,
+                };
+              }
+            })
+          );
 
-          const totalFrames = videosWithDurations.reduce((sum, v) => sum + v.durationInFrames, 0);
+          const totalFrames = mediaWithDurations.reduce((sum, m) => sum + m.durationInFrames, 0);
           
           return {
             durationInFrames: totalFrames,
             props: {
-              videos: videosWithDurations,
+              media: mediaWithDurations,
             },
           };
         }}
