@@ -1,8 +1,9 @@
-import React from 'react';
+import { Fragment } from 'react';
 import { AbsoluteFill, Audio, Img, useCurrentFrame, interpolate } from 'remotion';
 import { Video } from '@remotion/media';
 import { TransitionSeries, springTiming } from '@remotion/transitions';
 import { fade } from '@remotion/transitions/fade';
+import { backgroundAudio } from './media-schema';
 
 export interface MediaItem {
   type: 'video' | 'image';
@@ -14,82 +15,56 @@ export interface VideoSequenceProps {
   media?: MediaItem[];
 }
 
-// Get background audio URL (use proxy in production)
-const getAudioUrl = () => {
-  if (typeof window === 'undefined') {
-    return 'https://tribute-video-assets.tribute.co/EVOE%20-%20Pearl.mp3';
-  }
-  
-  const isProduction = window.location.hostname !== 'localhost';
-  
-  if (isProduction) {
-    return '/api/videos/EVOE%20-%20Pearl.mp3';
-  }
-  
-  return 'https://tribute-video-assets.tribute.co/EVOE%20-%20Pearl.mp3';
-};
+const AUDIO_SRC = backgroundAudio.src;
 
-// Calculate which media item is currently playing and return appropriate volume
-const useAudioVolume = (media: MediaItem[]) => {
+// Audio component that adjusts volume based on media type
+const MediaAudio: React.FC<{ type: 'video' | 'image'; nextType?: 'video' | 'image'; durationInFrames: number }> = ({ 
+  type, 
+  nextType,
+  durationInFrames 
+}) => {
   const frame = useCurrentFrame();
+  const targetVolume = type === 'image' ? 1.0 : 0.25;
   
-  if (media.length === 0) return 0.25;
-  
-  let currentFrame = 0;
-  
-  for (let i = 0; i < media.length; i++) {
-    const item = media[i];
-    const itemEnd = currentFrame + item.durationInFrames;
-    
-    if (frame >= currentFrame && frame < itemEnd) {
-      const transitionDuration = 20; // frames for smooth volume transition (matches visual transition)
-      const itemProgress = frame - currentFrame;
-      const framesRemaining = itemEnd - frame;
-      
-      // Get target volume for current item
-      const currentVolume = item.type === 'image' ? 1.0 : 0.25;
-      
-      // If we're at the END of the current item and there's a next item, start transitioning early
-      if (framesRemaining <= transitionDuration && i < media.length - 1) {
-        const nextVolume = media[i + 1].type === 'image' ? 1.0 : 0.25;
-        return interpolate(
-          framesRemaining,
-          [0, transitionDuration],
-          [nextVolume, currentVolume],
-          { extrapolateRight: 'clamp' }
-        );
-      }
-      
-      return currentVolume;
-    }
-    
-    currentFrame = itemEnd;
+  // If there's a next item and we're near the end, start transitioning to next volume
+  const transitionDuration = 15;
+  if (nextType && frame > durationInFrames - transitionDuration) {
+    const nextVolume = nextType === 'image' ? 1.0 : 0.25;
+    const volume = interpolate(
+      frame,
+      [durationInFrames - transitionDuration, durationInFrames],
+      [targetVolume, nextVolume],
+      { extrapolateRight: 'clamp' }
+    );
+    return <Audio src={AUDIO_SRC} volume={volume} />;
   }
   
-  // Default to video volume if we're past all items
-  return 0.25;
+  return <Audio src={AUDIO_SRC} volume={targetVolume} />;
 };
 
 export const VideoSequence: React.FC<VideoSequenceProps> = ({ media = [] }) => {
-  const audioVolume = useAudioVolume(media);
-  
   return (
     <AbsoluteFill style={{ backgroundColor: '#000' }}>
-      {/* Background audio - volume ducks for videos (25%) and rises for images (100%) */}
-      <Audio src={getAudioUrl()} volume={audioVolume} />
       
       <TransitionSeries>
         {media.map((item, index) => (
-          <React.Fragment key={`media-${index}`}>
+          <Fragment key={`${item.type}-${item.src}-${index}`}>
             <TransitionSeries.Sequence durationInFrames={item.durationInFrames}>
               <AbsoluteFill>
+                {/* Audio with volume based on current media type */}
+                <MediaAudio 
+                  type={item.type} 
+                  nextType={index < media.length - 1 ? media[index + 1].type : undefined}
+                  durationInFrames={item.durationInFrames}
+                />
+                
                 {item.type === 'video' ? (
                   <Video
                     src={item.src}
                     style={{
                       width: '100%',
                       height: '100%',
-                      objectFit: 'contain',
+                      objectFit: 'cover',
                     }}
                   />
                 ) : (
@@ -98,7 +73,7 @@ export const VideoSequence: React.FC<VideoSequenceProps> = ({ media = [] }) => {
                     style={{
                       width: '100%',
                       height: '100%',
-                      objectFit: 'contain',
+                      objectFit: 'cover',
                     }}
                   />
                 )}
@@ -115,7 +90,7 @@ export const VideoSequence: React.FC<VideoSequenceProps> = ({ media = [] }) => {
                 presentation={fade()}
               />
             )}
-          </React.Fragment>
+          </Fragment>
         ))}
       </TransitionSeries>
     </AbsoluteFill>

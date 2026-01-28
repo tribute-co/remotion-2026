@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { prefetch } from 'remotion';
 import { VideoSequence, MediaItem } from './VideoSequence';
 import { getVideoMetadata } from './get-video-metadata';
-import { mediaAssets } from './media-schema';
+import { backgroundAudio, mediaAssets } from './media-schema';
 
 // Use proxy in production, direct URLs in development
 const getMediaUrls = () => {
@@ -35,16 +35,15 @@ export const PlayerDemo: React.FC = () => {
           mediaItems.map(async (asset, index) => {
             if (asset.type === 'video') {
               const metadata = await getVideoMetadata(asset.src);
-              // Ensure minimum duration of 30 frames (1 second) for transitions
-              const durationInFrames = Math.max(30, Math.ceil(metadata.durationInSeconds * fps));
+              const durationInFrames = Math.ceil(metadata.durationInSeconds * fps);
               return {
                 type: 'video' as const,
                 src: asset.src,
                 durationInFrames,
               };
             } else {
-              // For images, use the specified duration (minimum 1 second to ensure it's longer than transitions)
-              const durationInFrames = Math.max(30, Math.ceil((asset.durationInSeconds || 3) * fps));
+              // For images, use the specified duration
+              const durationInFrames = Math.ceil((asset.durationInSeconds || 3) * fps);
               return {
                 type: 'image' as const,
                 src: asset.src,
@@ -67,7 +66,7 @@ export const PlayerDemo: React.FC = () => {
         });
 
         // Also prefetch the background audio
-        const audioUrl = 'https://tribute-video-assets.tribute.co/EVOE%20-%20Pearl.mp3';
+        const audioUrl = backgroundAudio.src;
         
         const audioPrefetch = prefetch(audioUrl, {
           method: 'blob-url',
