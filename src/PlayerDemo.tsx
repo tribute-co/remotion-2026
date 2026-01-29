@@ -1,7 +1,7 @@
 import { Player } from '@remotion/player';
 import { useEffect, useState } from 'react';
 import { prefetch } from 'remotion';
-import { VideoSequence, MediaItem } from './VideoSequence';
+import { VideoSequence, MediaItem, TRANSITION_DURATION_FRAMES } from './VideoSequence';
 import { getVideoMetadata } from './get-video-metadata';
 import { backgroundAudioTracks, mediaAssets } from './media-schema';
 
@@ -61,8 +61,10 @@ export const PlayerDemo: React.FC = () => {
         
         if (!mounted) return;
 
-        const totalFrames = mediaWithDurations.reduce((sum, m) => sum + m.durationInFrames, 0);
-        
+        const totalFrames =
+          mediaWithDurations.reduce((sum, m) => sum + m.durationInFrames, 0) +
+          (mediaWithDurations.length - 1) * TRANSITION_DURATION_FRAMES;
+
         setMedia(mediaWithDurations);
         setTotalDuration(totalFrames);
 
@@ -208,7 +210,7 @@ export const PlayerDemo: React.FC = () => {
           }}
           controls
           autoPlay={false}
-          inputProps={{ media }}
+          inputProps={{ media, totalDurationInFrames: totalDuration }}
         />
       </div>
     </div>

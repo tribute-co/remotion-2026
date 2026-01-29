@@ -11,6 +11,8 @@ export interface MediaAsset {
 export interface AudioAsset {
   src: string;
   volume?: number;
+  /** Duration in seconds (required for sequenced playback so tracks play in order and repeat). */
+  durationInSeconds: number;
 }
 
 export const mediaAssets: MediaAsset[] = [
@@ -149,14 +151,16 @@ export const mediaAssets: MediaAsset[] = [
   { type: 'video', src: 'https://tribute-production-encode.b-cdn.net/ff/f4f2c5c0344549b7635e1639bb29d1/IMG_8753.mp4' },
 ];
 
-/** Background music/ambience – multiple tracks are mixed together. */
+/** Background music/ambience – tracks play in order and repeat to fill the sequence. */
 export const backgroundAudioTracks: AudioAsset[] = [
   {
     src: `https://tribute-video-assets.tribute.co/Sailors_Lament_128k.mp3`,
     volume: 0.5,
+    durationInSeconds: 188,
   },
   {
     src: `https://tribute-video-assets.tribute.co/Golden_Days_128k.mp3`,
     volume: 0.5,
+    durationInSeconds: 187,
   },
 ];

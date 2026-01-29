@@ -1,5 +1,5 @@
 import { Composition } from 'remotion';
-import { VideoSequence, MediaItem, VideoSequenceProps } from './VideoSequence';
+import { VideoSequence, MediaItem, VideoSequenceProps, TRANSITION_DURATION_FRAMES } from './VideoSequence';
 import { getVideoMetadata } from './get-video-metadata';
 import { mediaAssets } from './media-schema';
 
@@ -41,12 +41,15 @@ export const RemotionRoot: React.FC = () => {
             })
           );
 
-          const totalFrames = mediaWithDurations.reduce((sum, m) => sum + m.durationInFrames, 0);
-          
+          const totalFrames =
+            mediaWithDurations.reduce((sum, m) => sum + m.durationInFrames, 0) +
+            (mediaWithDurations.length - 1) * TRANSITION_DURATION_FRAMES;
+
           return {
             durationInFrames: totalFrames,
             props: {
               media: mediaWithDurations,
+              totalDurationInFrames: totalFrames,
             },
           };
         }}
