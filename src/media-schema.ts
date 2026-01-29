@@ -152,11 +152,11 @@ export const mediaAssets: MediaAsset[] = [
 /** Background music/ambience – multiple tracks are mixed together. */
 export const backgroundAudioTracks: AudioAsset[] = [
   {
-    src: `https://tribute-prod-editor-music.tribute.co/Sailors_Lament_128k.mp3`,
+    src: `https://tribute-video-assets.tribute.co/Sailors_Lament_128k.mp3`,
     volume: 0.5,
   },
   {
-    src: `https://tribute-prod-editor-music.tribute.co/Golden_Days_128k.mp3`,
+    src: `https://tribute-video-assets.tribute.co/Golden_Days_128k.mp3`,
     volume: 0.5,
   },
 ];
