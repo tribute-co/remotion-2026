@@ -33,6 +33,12 @@ const PREFETCH_POLL_INTERVAL_MS = 5000;
 /** Max items to prefetch per interval tick; when user seeks far ahead we spread work over multiple ticks instead of bursting. */
 const MAX_PROGRESSIVE_PREFETCH_PER_TICK = 5;
 
+/** Retry duration calculation this many times before giving up. */
+const DURATION_RETRY_ATTEMPTS = 3;
+
+/** Delay (ms) between retries. */
+const DURATION_RETRY_DELAY_MS = 2000;
+
 /** True on iOS, Android, or other touch-first devices; used to default to muted until user taps. */
 function isMobileOrTablet(): boolean {
   if (typeof navigator === 'undefined') return false;
@@ -55,6 +61,8 @@ export const PlayerDemo: React.FC = () => {
   const [isMuted, setIsMuted] = useState(
     () => typeof window !== 'undefined' && isMobileOrTablet()
   );
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     let mounted = true;
@@ -63,96 +71,116 @@ export const PlayerDemo: React.FC = () => {
       src: getMediaUrl(asset.src),
     }));
 
-    // Runs on mount; can run again if component remounts (e.g. HMR in dev, or parent key change)
-    const calculateDurationsAndPrefetch = async () => {
-      try {
-        setStartedLoading(true);
-        log.prefetchOnce('start', 'Starting: computing durations for all media');
+    const calculateDurations = async (): Promise<MediaItem[]> => {
+      const mediaWithDurations: MediaItem[] = await Promise.all(
+        proxiedItems.map(async (asset) => {
+          let durationInFrames: number;
+          if (asset.type === 'video') {
+            const metadata = await getVideoMetadata(asset.src);
+            durationInFrames = Math.ceil(metadata.durationInSeconds * fps);
+          } else {
+            durationInFrames = Math.ceil((asset.durationInSeconds ?? 3) * fps);
+          }
+          durationInFrames = Math.max(durationInFrames, MIN_SEQUENCE_DURATION_FRAMES);
+          return {
+            type: asset.type,
+            src: asset.src,
+            durationInFrames,
+          };
+        })
+      );
+      return mediaWithDurations;
+    };
 
-        // Process all media assets (we need durations for the full timeline)
-        const mediaWithDurations: MediaItem[] = await Promise.all(
-          proxiedItems.map(async (asset) => {
-            let durationInFrames: number;
-            if (asset.type === 'video') {
-              const metadata = await getVideoMetadata(asset.src);
-              durationInFrames = Math.ceil(metadata.durationInSeconds * fps);
-            } else {
-              durationInFrames = Math.ceil((asset.durationInSeconds ?? 3) * fps);
-            }
-            durationInFrames = Math.max(durationInFrames, MIN_SEQUENCE_DURATION_FRAMES);
-            return {
-              type: asset.type,
-              src: asset.src,
-              durationInFrames,
-            };
-          })
-        );
+    const runWithRetries = async () => {
+      setLoadError(null);
+      setStartedLoading(true);
+      log.prefetchOnce('start', 'Starting: computing durations for all media');
 
+      let lastError: unknown;
+      for (let attempt = 1; attempt <= DURATION_RETRY_ATTEMPTS; attempt++) {
         if (!mounted) return;
+        try {
+          if (attempt > 1) {
+            log.prefetch(`Retry ${attempt}/${DURATION_RETRY_ATTEMPTS} (duration calculation)`);
+            await new Promise((r) => setTimeout(r, DURATION_RETRY_DELAY_MS));
+            if (!mounted) return;
+          }
+          const mediaWithDurations = await calculateDurations();
+          if (!mounted) return;
+          const totalFrames = mediaWithDurations.reduce((sum, m) => sum + m.durationInFrames, 0);
+          setMedia(mediaWithDurations);
+          setTotalDuration(totalFrames);
 
-        const totalFrames = mediaWithDurations.reduce((sum, m) => sum + m.durationInFrames, 0);
-        setMedia(mediaWithDurations);
-        setTotalDuration(totalFrames);
-
-        const initialCount = Math.min(INITIAL_PREFETCH_COUNT, mediaWithDurations.length);
-        log.prefetchOnce(
-          'initial',
-          `Initial prefetch: first ${initialCount} media + ${backgroundAudioTracks.length} audio tracks (blob-url)`
-        );
-        for (let index = 0; index < initialCount; index++) {
-          setLoadingProgress((prev) => ({ ...prev, [index]: 0 }));
-        }
-
-        // Prefetch only first N media items + all background audio (reduces memory on iOS)
-        const audioPrefetches = backgroundAudioTracks.map((track) =>
-          prefetch(track.src, { method: 'blob-url' })
-        );
-        const initialMediaPrefetches = mediaWithDurations.slice(0, initialCount).map((item, index) => {
-          const { waitUntilDone } = prefetch(item.src, {
-            method: 'blob-url',
-            onProgress: (progress) => {
-              if (mounted && progress.totalBytes) {
-                const percent = Math.round((progress.loadedBytes / progress.totalBytes) * 100);
-                if (!isNaN(percent)) {
-                  setLoadingProgress((prev) => ({ ...prev, [index]: percent }));
-                }
-              }
-            },
-          });
-          return waitUntilDone();
-        });
-
-        await Promise.all([
-          ...initialMediaPrefetches,
-          ...audioPrefetches.map((p) => p.waitUntilDone()),
-        ]);
-
-        if (mounted) {
-          log.prefetchOnce('initial-done', 'Initial prefetch complete');
+          const initialCount = Math.min(INITIAL_PREFETCH_COUNT, mediaWithDurations.length);
+          log.prefetchOnce(
+            'initial',
+            `Initial prefetch: first ${initialCount} media + ${backgroundAudioTracks.length} audio tracks (blob-url)`
+          );
           for (let index = 0; index < initialCount; index++) {
-            setLoadingProgress((prev) => ({ ...prev, [index]: 100 }));
+            setLoadingProgress((prev) => ({ ...prev, [index]: 0 }));
           }
-          await new Promise((resolve) => setTimeout(resolve, 300));
-          setAllPrefetched(true);
-          log.prefetchOnce('player-ready', 'Player ready (initial prefetch done)');
-        }
-      } catch (error) {
-        console.error('Error loading media:', error);
-        if (mounted) {
-          setAllPrefetched(true);
-          if (!totalDuration) {
-            setTotalDuration(900);
+
+          const audioPrefetches = backgroundAudioTracks.map((track) =>
+            prefetch(track.src, { method: 'blob-url' })
+          );
+          const initialMediaPrefetches = mediaWithDurations
+            .slice(0, initialCount)
+            .map((item, index) => {
+              const { waitUntilDone } = prefetch(item.src, {
+                method: 'blob-url',
+                onProgress: (progress) => {
+                  if (mounted && progress.totalBytes) {
+                    const percent = Math.round(
+                      (progress.loadedBytes / progress.totalBytes) * 100
+                    );
+                    if (!isNaN(percent)) {
+                      setLoadingProgress((prev) => ({ ...prev, [index]: percent }));
+                    }
+                  }
+                },
+              });
+              return waitUntilDone();
+            });
+
+          await Promise.all([
+            ...initialMediaPrefetches,
+            ...audioPrefetches.map((p) => p.waitUntilDone()),
+          ]);
+
+          if (mounted) {
+            log.prefetchOnce('initial-done', 'Initial prefetch complete');
+            for (let index = 0; index < initialCount; index++) {
+              setLoadingProgress((prev) => ({ ...prev, [index]: 100 }));
+            }
+            await new Promise((resolve) => setTimeout(resolve, 300));
+            setAllPrefetched(true);
+            log.prefetchOnce('player-ready', 'Player ready (initial prefetch done)');
           }
+          return;
+        } catch (err) {
+          lastError = err;
+          console.warn(`Attempt ${attempt}/${DURATION_RETRY_ATTEMPTS} failed:`, err);
         }
+      }
+
+      if (mounted) {
+        console.error('All retries failed:', lastError);
+        setLoadError(
+          'Unable to load media. Please check your connection and try again.'
+        );
+        setMedia(null);
+        setTotalDuration(null);
+        setAllPrefetched(false);
       }
     };
 
-    calculateDurationsAndPrefetch();
+    runWithRetries();
 
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [retryCount]);
 
   // Progressively prefetch more media as playback advances (keeps memory lower on mobile)
   useEffect(() => {
@@ -200,6 +228,52 @@ export const PlayerDemo: React.FC = () => {
     return () => clearInterval(interval);
   }, [media, allPrefetched, fps]);
 
+  const containerStyle = {
+    display: 'flex' as const,
+    flexDirection: 'column' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    minHeight: '100dvh' as const,
+    height: '100dvh' as const,
+    backgroundColor: '#1a1a1a',
+    color: '#fff',
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    padding: '2rem',
+    boxSizing: 'border-box' as const,
+  };
+
+  if (loadError) {
+    return (
+      <div style={containerStyle}>
+        <div style={{ textAlign: 'center', maxWidth: '400px', width: '100%' }}>
+          <h2 style={{ marginBottom: '1rem' }}>Unable to load</h2>
+          <p style={{ color: '#aaa', marginBottom: '1.5rem', fontSize: '0.95rem' }}>
+            {loadError}
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              setLoadError(null);
+              setRetryCount((c) => c + 1);
+            }}
+            style={{
+              padding: '0.75rem 1.5rem',
+              fontSize: '1rem',
+              fontWeight: 500,
+              color: '#fff',
+              backgroundColor: '#3b82f6',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer',
+            }}
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (!totalDuration || !media || !allPrefetched) {
     const loadingCount = Math.min(INITIAL_PREFETCH_COUNT, media?.length ?? mediaAssets.length);
     const overallProgress =
@@ -210,22 +284,9 @@ export const PlayerDemo: React.FC = () => {
         : 0;
 
     return (
-      <div style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        minHeight: '100dvh',
-        height: '100dvh',
-        backgroundColor: '#1a1a1a',
-        color: '#fff',
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-        padding: '2rem',
-        boxSizing: 'border-box'
-      }}>
+      <div style={containerStyle}>
         <div style={{ textAlign: 'center', maxWidth: '500px', width: '100%' }}>
           <h2 style={{ marginBottom: '2rem' }}>Loading media...</h2>
-          
           <div style={{
             width: '100%',
             height: '8px',
@@ -242,7 +303,6 @@ export const PlayerDemo: React.FC = () => {
               borderRadius: '4px'
             }} />
           </div>
-          
           <p style={{ color: '#888', fontSize: '0.9rem' }}>
             {overallProgress}% complete
           </p>
