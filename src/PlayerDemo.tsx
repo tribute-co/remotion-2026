@@ -1,10 +1,9 @@
-import { Player } from '@remotion/player';
+import { Player, PlayerRef } from '@remotion/player';
 import { useEffect, useRef, useState } from 'react';
-import { prefetch } from 'remotion';
 import { VideoSequence, MediaItem } from './VideoSequence';
 import { getVideoMetadata } from './get-video-metadata';
 import { log } from './logger';
-import { backgroundAudioTracks, mediaAssets } from './media-schema';
+import { mediaAssets } from './media-schema';
 
 /** In dev, rewrite CDN URLs to same-origin proxy to avoid CORS. Production uses direct URLs. */
 function getMediaUrl(url: string): string {
@@ -21,18 +20,6 @@ function getMediaUrl(url: string): string {
 /** Minimum duration per clip (avoids zero-length). */
 const MIN_SEQUENCE_DURATION_FRAMES = 1;
 
-/** Only prefetch this many media items initially to avoid iOS memory crash; rest load progressively. */
-const INITIAL_PREFETCH_COUNT = 5;
-
-/** Prefetch items that start within this many seconds of current playhead. */
-const PREFETCH_AHEAD_SECONDS = 60;
-
-/** Interval (ms) to check playhead and prefetch more. */
-const PREFETCH_POLL_INTERVAL_MS = 5000;
-
-/** Max items to prefetch per interval tick; when user seeks far ahead we spread work over multiple ticks instead of bursting. */
-const MAX_PROGRESSIVE_PREFETCH_PER_TICK = 5;
-
 /** Retry duration calculation this many times before giving up. */
 const DURATION_RETRY_ATTEMPTS = 3;
 
@@ -46,23 +33,33 @@ function isMobileOrTablet(): boolean {
   return /iPhone|iPad|iPod|Android|webOS|Mobile|Tablet/i.test(ua) || 'ontouchstart' in window;
 }
 
-type PlayerRef = { getCurrentFrame: () => number } | null;
-
 export const PlayerDemo: React.FC = () => {
   const [media, setMedia] = useState<MediaItem[] | null>(null);
   const [totalDuration, setTotalDuration] = useState<number | null>(null);
-  const [loadingProgress, setLoadingProgress] = useState<{[key: number]: number}>({});
-  const [allPrefetched, setAllPrefetched] = useState(false);
-  const [startedLoading, setStartedLoading] = useState(false);
   const fps = 30;
   const playerRef = useRef<PlayerRef>(null);
-  const nextPrefetchIndexRef = useRef(INITIAL_PREFETCH_COUNT);
-  // Default muted on mobile so one tap unmutes both video and bg music (iOS autoplay policy)
+  // Sync with Player's mute state (starts muted on mobile via initiallyMuted prop)
   const [isMuted, setIsMuted] = useState(
     () => typeof window !== 'undefined' && isMobileOrTablet()
   );
   const [loadError, setLoadError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
+
+  // Sync our isMuted state with Player's mute state
+  useEffect(() => {
+    const player = playerRef.current;
+    if (!player) return;
+
+    const onMuteChange = (e: { detail: { isMuted: boolean } }) => {
+      log.player(e.detail.isMuted ? 'Muted (Player controls)' : 'Unmuted (Player controls)');
+      setIsMuted(e.detail.isMuted);
+    };
+
+    player.addEventListener('mutechange', onMuteChange);
+    return () => {
+      player.removeEventListener('mutechange', onMuteChange);
+    };
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -94,7 +91,6 @@ export const PlayerDemo: React.FC = () => {
 
     const runWithRetries = async () => {
       setLoadError(null);
-      setStartedLoading(true);
       log.prefetchOnce('start', 'Starting: computing durations for all media');
 
       let lastError: unknown;
@@ -111,52 +107,7 @@ export const PlayerDemo: React.FC = () => {
           const totalFrames = mediaWithDurations.reduce((sum, m) => sum + m.durationInFrames, 0);
           setMedia(mediaWithDurations);
           setTotalDuration(totalFrames);
-
-          const initialCount = Math.min(INITIAL_PREFETCH_COUNT, mediaWithDurations.length);
-          log.prefetchOnce(
-            'initial',
-            `Initial prefetch: first ${initialCount} media + ${backgroundAudioTracks.length} audio tracks (blob-url)`
-          );
-          for (let index = 0; index < initialCount; index++) {
-            setLoadingProgress((prev) => ({ ...prev, [index]: 0 }));
-          }
-
-          const audioPrefetches = backgroundAudioTracks.map((track) =>
-            prefetch(track.src, { method: 'blob-url' })
-          );
-          const initialMediaPrefetches = mediaWithDurations
-            .slice(0, initialCount)
-            .map((item, index) => {
-              const { waitUntilDone } = prefetch(item.src, {
-                method: 'blob-url',
-                onProgress: (progress) => {
-                  if (mounted && progress.totalBytes) {
-                    const percent = Math.round(
-                      (progress.loadedBytes / progress.totalBytes) * 100
-                    );
-                    if (!isNaN(percent)) {
-                      setLoadingProgress((prev) => ({ ...prev, [index]: percent }));
-                    }
-                  }
-                },
-              });
-              return waitUntilDone();
-            });
-
-          await Promise.all([
-            ...initialMediaPrefetches,
-            ...audioPrefetches.map((p) => p.waitUntilDone()),
-          ]);
-
-          if (mounted) {
-            log.prefetchOnce('initial-done', 'Initial prefetch complete');
-            for (let index = 0; index < initialCount; index++) {
-              setLoadingProgress((prev) => ({ ...prev, [index]: 100 }));
-            }
-            await new Promise((resolve) => setTimeout(resolve, 300));
-            setAllPrefetched(true);
-            log.prefetchOnce('player-ready', 'Player ready (initial prefetch done)');
-          }
+          log.prefetchOnce('player-ready', 'Player ready (durations calculated)');
           return;
         } catch (err) {
           lastError = err;
@@ -171,7 +122,6 @@ export const PlayerDemo: React.FC = () => {
         );
         setMedia(null);
         setTotalDuration(null);
-        setAllPrefetched(false);
       }
     };
 
@@ -181,52 +131,6 @@ export const PlayerDemo: React.FC = () => {
       mounted = false;
     };
   }, [retryCount]);
-
-  // Progressively prefetch more media as playback advances (keeps memory lower on mobile)
-  useEffect(() => {
-    if (!media || !allPrefetched || media.length <= INITIAL_PREFETCH_COUNT) return;
-
-    const aheadFrames = PREFETCH_AHEAD_SECONDS * fps;
-    const startFrames: number[] = [];
-    let offset = 0;
-    for (const item of media) {
-      startFrames.push(offset);
-      offset += item.durationInFrames;
-    }
-
-    const prefetchUpcoming = () => {
-      const nextIndex = nextPrefetchIndexRef.current;
-      if (nextIndex >= media.length) return;
-
-      const player = playerRef.current;
-      const currentFrame =
-        typeof player?.getCurrentFrame === 'function' ? player.getCurrentFrame() : null;
-
-      if (currentFrame === null) {
-        // Player not mounted yet: prefetch only the next one to avoid memory spike
-        log.prefetch('Progressive prefetch (no playhead yet): item', nextIndex);
-        prefetch(media[nextIndex].src, { method: 'blob-url' });
-        nextPrefetchIndexRef.current = nextIndex + 1;
-        return;
-      }
-
-      let prefetchedThisTick = 0;
-      for (let i = nextIndex; i < media.length && prefetchedThisTick < MAX_PROGRESSIVE_PREFETCH_PER_TICK; i++) {
-        if (startFrames[i] <= currentFrame + aheadFrames) {
-          log.prefetch('Progressive prefetch: item', i, `(frame ${currentFrame}, start ${startFrames[i]})`);
-          prefetch(media[i].src, { method: 'blob-url' });
-          nextPrefetchIndexRef.current = i + 1;
-          prefetchedThisTick++;
-        } else {
-          break;
-        }
-      }
-    };
-
-    prefetchUpcoming();
-    const interval = setInterval(prefetchUpcoming, PREFETCH_POLL_INTERVAL_MS);
-    return () => clearInterval(interval);
-  }, [media, allPrefetched, fps]);
 
   const containerStyle = {
     display: 'flex' as const,
@@ -274,38 +178,11 @@ export const PlayerDemo: React.FC = () => {
     );
   }
 
-  if (!totalDuration || !media || !allPrefetched) {
-    const loadingCount = Math.min(INITIAL_PREFETCH_COUNT, media?.length ?? mediaAssets.length);
-    const overallProgress =
-      loadingCount > 0 && Object.keys(loadingProgress).length > 0
-        ? Math.round(
-            Object.values(loadingProgress).reduce((a, b) => a + b, 0) / loadingCount
-          )
-        : 0;
-
+  if (!totalDuration || !media) {
     return (
       <div style={containerStyle}>
         <div style={{ textAlign: 'center', maxWidth: '500px', width: '100%' }}>
           <h2 style={{ marginBottom: '2rem' }}>Loading media...</h2>
-          <div style={{
-            width: '100%',
-            height: '8px',
-            backgroundColor: '#333',
-            borderRadius: '4px',
-            overflow: 'hidden',
-            marginBottom: '1rem'
-          }}>
-            <div style={{
-              width: `${overallProgress}%`,
-              height: '100%',
-              backgroundColor: '#3b82f6',
-              transition: 'width 0.3s ease',
-              borderRadius: '4px'
-            }} />
-          </div>
-          <p style={{ color: '#888', fontSize: '0.9rem' }}>
-            {overallProgress}% complete
-          </p>
         </div>
       </div>
     );
@@ -349,50 +226,13 @@ export const PlayerDemo: React.FC = () => {
           }}
           controls
           autoPlay={false}
+          initiallyMuted={typeof window !== 'undefined' && isMobileOrTablet()}
           inputProps={{
             media,
             totalDurationInFrames: totalDuration,
             isMuted,
           }}
         />
-        <button
-          type="button"
-          onClick={() => {
-            log.player(isMuted ? 'Unmuted (mute button)' : 'Muted (mute button)');
-            setIsMuted((m) => !m);
-          }}
-          aria-label={isMuted ? 'Unmute' : 'Mute'}
-          title={isMuted ? 'Unmute' : 'Mute'}
-          style={{
-            position: 'absolute',
-            bottom: '12px',
-            right: '12px',
-            width: '44px',
-            height: '44px',
-            borderRadius: '50%',
-            border: 'none',
-            backgroundColor: 'rgba(0,0,0,0.6)',
-            color: '#fff',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: 0,
-          }}
-        >
-          {isMuted ? (
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <path d="M11 5L6 9H2v6h4l5 4V5z" />
-              <line x1="23" y1="9" x2="17" y2="15" />
-              <line x1="17" y1="9" x2="23" y2="15" />
-            </svg>
-          ) : (
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-              <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
-            </svg>
-          )}
-        </button>
       </div>
     </div>
   );

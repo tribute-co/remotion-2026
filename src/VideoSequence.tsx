@@ -12,6 +12,9 @@ import {
 import { log } from './logger';
 import { AudioAsset, backgroundAudioTracks } from './media-schema';
 
+/** Premount sequences this many frames before they start (gives time to load before visible). */
+const PREMOUNT_FRAMES = 30; // 1 second at 30fps
+
 export interface MediaItem {
   type: 'video' | 'image';
   src: string;
@@ -26,6 +29,46 @@ export interface VideoSequenceProps {
 }
 
 type MediaSegment = { type: 'video' | 'image'; fromFrame: number; toFrame: number };
+
+/** Media component that mounts early (for loading) but only visible during its window. */
+function PremountedMedia({
+  item,
+  isMuted,
+  premountOffset,
+}: {
+  item: MediaItem;
+  isMuted: boolean;
+  premountOffset: number;
+}) {
+  const frame = useCurrentFrame();
+  const isPremount = frame < premountOffset;
+  return (
+    <AbsoluteFill style={{ opacity: isPremount ? 0 : 1, pointerEvents: isPremount ? 'none' : 'auto' }}>
+      {item.type === 'video' ? (
+        <Html5Video
+          src={item.src}
+          muted={isMuted}
+          pauseWhenBuffering
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: 'contain',
+          }}
+        />
+      ) : (
+        <Img
+          src={item.src}
+          pauseWhenLoading
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: 'contain',
+          }}
+        />
+      )}
+    </AbsoluteFill>
+  );
+}
 
 /** Logs when the current media segment (slide) changes. */
 function SlideChangeLogger({ segments }: { segments: MediaSegment[] }) {
@@ -95,6 +138,7 @@ function BackgroundAudioWithDucking({
       src={track.src}
       volume={effectiveVolume}
       useWebAudioApi
+      pauseWhenBuffering
     />
   );
 }
@@ -134,7 +178,11 @@ export const VideoSequence: React.FC<VideoSequenceProps> = ({
       <SlideChangeLogger segments={segments} />
       {/* Background audio: sequential tracks, repeat to fill, volume duck by media type */}
       {audioSegments.map((seg, i) => (
-        <Sequence key={i} from={seg.fromFrame} durationInFrames={seg.durationInFrames}>
+        <Sequence
+          key={i}
+          from={Math.max(0, seg.fromFrame - PREMOUNT_FRAMES)}
+          durationInFrames={seg.durationInFrames + PREMOUNT_FRAMES}
+        >
           <BackgroundAudioWithDucking
             track={backgroundAudioTracks[seg.trackIndex]}
             segments={segments}
@@ -144,39 +192,24 @@ export const VideoSequence: React.FC<VideoSequenceProps> = ({
         </Sequence>
       ))}
 
-      {/* Hard cuts: one Sequence per media item, back-to-back */}
+      {/* Hard cuts: one Sequence per media item, back-to-back, premounted */}
       {media.map((item, index) => {
         const fromFrame = media
           .slice(0, index)
           .reduce((sum, m) => sum + m.durationInFrames, 0);
+        const premountFrom = Math.max(0, fromFrame - PREMOUNT_FRAMES);
+        const premountOffset = fromFrame - premountFrom; // frames before actual start
         return (
           <Sequence
             key={`${item.type}-${item.src}-${index}`}
-            from={fromFrame}
-            durationInFrames={item.durationInFrames}
+            from={premountFrom}
+            durationInFrames={item.durationInFrames + premountOffset}
           >
-            <AbsoluteFill>
-              {item.type === 'video' ? (
-                <Html5Video
-                  src={item.src}
-                  muted={isMuted}
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'contain',
-                  }}
-                />
-              ) : (
-                <Img
-                  src={item.src}
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'contain',
-                  }}
-                />
-              )}
-            </AbsoluteFill>
+            <PremountedMedia
+              item={item}
+              isMuted={isMuted}
+              premountOffset={premountOffset}
+            />
           </Sequence>
         );
       })}
