@@ -5,6 +5,19 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 3000,
+    proxy: {
+      // Avoid CORS in dev: browser requests same-origin, Vite fetches from CDN
+      '/photos-r2-proxy': {
+        target: 'https://photos-r2.tribute.co',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/photos-r2-proxy/, ''),
+      },
+      '/encode-proxy': {
+        target: 'https://tribute-production-encode.b-cdn.net',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/encode-proxy/, ''),
+      },
+    },
   },
   build: {
     outDir: 'dist',

@@ -5,15 +5,20 @@ import { VideoSequence, MediaItem } from './VideoSequence';
 import { getVideoMetadata } from './get-video-metadata';
 import { backgroundAudioTracks, mediaAssets } from './media-schema';
 
-// Use proxy in production, direct URLs in development
-const getMediaUrls = () => {
-  const isProduction = typeof window !== 'undefined' && window.location.hostname !== 'localhost';
-  
-  // For now, use direct URLs (we can add proxy logic later if needed)
-  return mediaAssets;
-};
+/** In dev, rewrite CDN URLs to same-origin proxy to avoid CORS. Production uses direct URLs. */
+function getMediaUrl(url: string): string {
+  if (import.meta.env.DEV && typeof window !== 'undefined') {
+    const origin = window.location.origin;
+    if (url.startsWith('https://photos-r2.tribute.co/'))
+      return `${origin}/photos-r2-proxy${url.slice('https://photos-r2.tribute.co'.length)}`;
+    if (url.startsWith('https://tribute-production-encode.b-cdn.net/'))
+      return `${origin}/encode-proxy${url.slice('https://tribute-production-encode.b-cdn.net'.length)}`;
+  }
+  return url;
+}
 
-const mediaItems = getMediaUrls();
+/** TransitionSeries.Transition fade length; each sequence must be at least this long. */
+const MIN_SEQUENCE_DURATION_FRAMES = 10;
 
 export const PlayerDemo: React.FC = () => {
   const [media, setMedia] = useState<MediaItem[] | null>(null);
@@ -25,31 +30,32 @@ export const PlayerDemo: React.FC = () => {
 
   useEffect(() => {
     let mounted = true;
+    const proxiedItems = mediaAssets.map((asset) => ({
+      ...asset,
+      src: getMediaUrl(asset.src),
+    }));
 
     const calculateDurationsAndPrefetch = async () => {
       try {
         setStartedLoading(true);
         
-        // Process all media assets
+        // Process all media assets (use proxied URLs in dev to avoid CORS)
         const mediaWithDurations: MediaItem[] = await Promise.all(
-          mediaItems.map(async (asset, index) => {
+          proxiedItems.map(async (asset) => {
+            let durationInFrames: number;
             if (asset.type === 'video') {
               const metadata = await getVideoMetadata(asset.src);
-              const durationInFrames = Math.ceil(metadata.durationInSeconds * fps);
-              return {
-                type: 'video' as const,
-                src: asset.src,
-                durationInFrames,
-              };
+              durationInFrames = Math.ceil(metadata.durationInSeconds * fps);
             } else {
-              // For images, use the specified duration
-              const durationInFrames = Math.ceil((asset.durationInSeconds || 3) * fps);
-              return {
-                type: 'image' as const,
-                src: asset.src,
-                durationInFrames,
-              };
+              durationInFrames = Math.ceil((asset.durationInSeconds ?? 3) * fps);
             }
+            // TransitionSeries requires each sequence to be at least as long as the transition
+            durationInFrames = Math.max(durationInFrames, MIN_SEQUENCE_DURATION_FRAMES);
+            return {
+              type: asset.type,
+              src: asset.src,
+              durationInFrames,
+            };
           })
         );
         
@@ -61,7 +67,7 @@ export const PlayerDemo: React.FC = () => {
         setTotalDuration(totalFrames);
 
         // Simulate minimum progress for better UX
-        mediaItems.forEach((_, index) => {
+        proxiedItems.forEach((_, index) => {
           setLoadingProgress(prev => ({ ...prev, [index]: 0 }));
         });
 
@@ -71,7 +77,7 @@ export const PlayerDemo: React.FC = () => {
         );
 
         // Then, prefetch all media with progress tracking
-        const prefetchPromises = mediaItems.map((asset, index) => {
+        const prefetchPromises = proxiedItems.map((asset, index) => {
           const { waitUntilDone } = prefetch(asset.src, {
             method: 'blob-url',
             onProgress: (progress) => {
@@ -94,7 +100,7 @@ export const PlayerDemo: React.FC = () => {
         
         // Ensure all show 100% before completing
         if (mounted) {
-          mediaItems.forEach((_, index) => {
+          proxiedItems.forEach((_, index) => {
             setLoadingProgress(prev => ({ ...prev, [index]: 100 }));
           });
           
@@ -123,7 +129,7 @@ export const PlayerDemo: React.FC = () => {
 
   if (!totalDuration || !media || !allPrefetched) {
     const overallProgress = Object.keys(loadingProgress).length > 0
-      ? Math.round(Object.values(loadingProgress).reduce((a, b) => a + b, 0) / mediaItems.length)
+      ? Math.round(Object.values(loadingProgress).reduce((a, b) => a + b, 0) / mediaAssets.length)
       : 0;
 
     return (

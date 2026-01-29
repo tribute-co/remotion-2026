@@ -1,7 +1,7 @@
 import { Fragment } from 'react';
 import { AbsoluteFill, Audio, Img, useCurrentFrame, interpolate } from 'remotion';
 import { Video } from '@remotion/media';
-import { TransitionSeries, springTiming } from '@remotion/transitions';
+import { TransitionSeries, linearTiming } from '@remotion/transitions';
 import { fade } from '@remotion/transitions/fade';
 import { backgroundAudioTracks } from './media-schema';
 
@@ -69,7 +69,7 @@ export const VideoSequence: React.FC<VideoSequenceProps> = ({ media = [] }) => {
                     style={{
                       width: '100%',
                       height: '100%',
-                      objectFit: 'cover',
+                      objectFit: 'contain',
                     }}
                   />
                 ) : (
@@ -78,7 +78,7 @@ export const VideoSequence: React.FC<VideoSequenceProps> = ({ media = [] }) => {
                     style={{
                       width: '100%',
                       height: '100%',
-                      objectFit: 'cover',
+                      objectFit: 'contain',
                     }}
                   />
                 )}
@@ -87,11 +87,7 @@ export const VideoSequence: React.FC<VideoSequenceProps> = ({ media = [] }) => {
             {index < media.length - 1 && (
               <TransitionSeries.Transition
                 key={`transition-${index}`}
-                timing={springTiming({
-                  config: {
-                    damping: 200,
-                  },
-                })}
+                timing={linearTiming({ durationInFrames: 10 })}
                 presentation={fade()}
               />
             )}
