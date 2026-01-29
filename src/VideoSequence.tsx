@@ -1,12 +1,6 @@
-import { Fragment } from 'react';
 import { AbsoluteFill, Audio, Img, Sequence, useCurrentFrame, useVideoConfig, interpolate } from 'remotion';
 import { Video } from '@remotion/media';
-import { TransitionSeries, linearTiming } from '@remotion/transitions';
-import { fade } from '@remotion/transitions/fade';
 import { AudioAsset, backgroundAudioTracks } from './media-schema';
-
-/** Must match TransitionSeries.Transition timing; used for segment boundaries and total duration. */
-export const TRANSITION_DURATION_FRAMES = 10;
 
 export interface MediaItem {
   type: 'video' | 'image';
@@ -25,25 +19,28 @@ type MediaSegment = { type: 'video' | 'image'; fromFrame: number; toFrame: numbe
 function BackgroundAudioWithDucking({
   track,
   segments,
+  /** Composition frame where this audio Sequence started; useCurrentFrame() inside Sequence is relative. */
+  sequenceFromFrame,
 }: {
   track: AudioAsset;
   segments: MediaSegment[];
+  sequenceFromFrame: number;
 }) {
-  const frame = useCurrentFrame();
-  const transitionDuration = 15;
+  const relativeFrame = useCurrentFrame();
+  const frame = sequenceFromFrame + relativeFrame; // composition frame for correct segment lookup
+  const crossfadeFrames = 10;
 
   let volume = 0.15; // default ducked
   for (let i = 0; i < segments.length; i++) {
     const seg = segments[i];
-    if (frame < seg.fromFrame) break;
-    if (frame <= seg.toFrame) {
+    const nextSeg = segments[i + 1];
+    if (frame >= seg.fromFrame && frame < seg.toFrame) {
       const targetVolume = seg.type === 'image' ? 1.0 : 0.15;
-      const nextSeg = segments[i + 1];
-      if (nextSeg && frame > seg.toFrame - transitionDuration) {
+      if (nextSeg && frame > seg.toFrame - crossfadeFrames) {
         const nextVolume = nextSeg.type === 'image' ? 1.0 : 0.15;
         volume = interpolate(
           frame,
-          [seg.toFrame - transitionDuration, seg.toFrame],
+          [seg.toFrame - crossfadeFrames, seg.toFrame],
           [targetVolume, nextVolume],
           { extrapolateRight: 'clamp' }
         );
@@ -60,16 +57,14 @@ function BackgroundAudioWithDucking({
 export const VideoSequence: React.FC<VideoSequenceProps> = ({ media = [], totalDurationInFrames }) => {
   const { fps } = useVideoConfig();
   const totalFrames =
-    totalDurationInFrames ??
-    media.reduce((sum, m) => sum + m.durationInFrames, 0) + (media.length - 1) * TRANSITION_DURATION_FRAMES;
+    totalDurationInFrames ?? media.reduce((sum, m) => sum + m.durationInFrames, 0);
 
-  // Media segments with global from/to for volume ducking (match TransitionSeries: each segment after a 10-frame transition)
+  // Media segments back-to-back (hard cuts, no transition gaps)
   const segments: MediaSegment[] = [];
   let offset = 0;
-  for (let i = 0; i < media.length; i++) {
-    const item = media[i];
+  for (const item of media) {
     segments.push({ type: item.type, fromFrame: offset, toFrame: offset + item.durationInFrames });
-    offset += item.durationInFrames + TRANSITION_DURATION_FRAMES;
+    offset += item.durationInFrames;
   }
 
   // Background audio: play tracks in order, repeat to fill composition
@@ -90,46 +85,49 @@ export const VideoSequence: React.FC<VideoSequenceProps> = ({ media = [], totalD
       {/* Background audio: sequential tracks, repeat to fill, volume duck by media type */}
       {audioSegments.map((seg, i) => (
         <Sequence key={i} from={seg.fromFrame} durationInFrames={seg.durationInFrames}>
-          <BackgroundAudioWithDucking track={backgroundAudioTracks[seg.trackIndex]} segments={segments} />
+          <BackgroundAudioWithDucking
+            track={backgroundAudioTracks[seg.trackIndex]}
+            segments={segments}
+            sequenceFromFrame={seg.fromFrame}
+          />
         </Sequence>
       ))}
 
-      <TransitionSeries>
-        {media.map((item, index) => (
-          <Fragment key={`${item.type}-${item.src}-${index}`}>
-            <TransitionSeries.Sequence durationInFrames={item.durationInFrames}>
-              <AbsoluteFill>
-                {item.type === 'video' ? (
-                  <Video
-                    src={item.src}
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      objectFit: 'contain',
-                    }}
-                  />
-                ) : (
-                  <Img
-                    src={item.src}
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      objectFit: 'contain',
-                    }}
-                  />
-                )}
-              </AbsoluteFill>
-            </TransitionSeries.Sequence>
-            {index < media.length - 1 && (
-              <TransitionSeries.Transition
-                key={`transition-${index}`}
-                timing={linearTiming({ durationInFrames: TRANSITION_DURATION_FRAMES })}
-                presentation={fade()}
-              />
-            )}
-          </Fragment>
-        ))}
-      </TransitionSeries>
+      {/* Hard cuts: one Sequence per media item, back-to-back */}
+      {media.map((item, index) => {
+        const fromFrame = media
+          .slice(0, index)
+          .reduce((sum, m) => sum + m.durationInFrames, 0);
+        return (
+          <Sequence
+            key={`${item.type}-${item.src}-${index}`}
+            from={fromFrame}
+            durationInFrames={item.durationInFrames}
+          >
+            <AbsoluteFill>
+              {item.type === 'video' ? (
+                <Video
+                  src={item.src}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'contain',
+                  }}
+                />
+              ) : (
+                <Img
+                  src={item.src}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'contain',
+                  }}
+                />
+              )}
+            </AbsoluteFill>
+          </Sequence>
+        );
+      })}
     </AbsoluteFill>
   );
 };

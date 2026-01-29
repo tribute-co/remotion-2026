@@ -1,7 +1,7 @@
 import { Player } from '@remotion/player';
 import { useEffect, useState } from 'react';
 import { prefetch } from 'remotion';
-import { VideoSequence, MediaItem, TRANSITION_DURATION_FRAMES } from './VideoSequence';
+import { VideoSequence, MediaItem } from './VideoSequence';
 import { getVideoMetadata } from './get-video-metadata';
 import { backgroundAudioTracks, mediaAssets } from './media-schema';
 
@@ -17,8 +17,8 @@ function getMediaUrl(url: string): string {
   return url;
 }
 
-/** TransitionSeries.Transition fade length; each sequence must be at least this long. */
-const MIN_SEQUENCE_DURATION_FRAMES = 10;
+/** Minimum duration per clip (avoids zero-length). */
+const MIN_SEQUENCE_DURATION_FRAMES = 1;
 
 export const PlayerDemo: React.FC = () => {
   const [media, setMedia] = useState<MediaItem[] | null>(null);
@@ -49,7 +49,6 @@ export const PlayerDemo: React.FC = () => {
             } else {
               durationInFrames = Math.ceil((asset.durationInSeconds ?? 3) * fps);
             }
-            // TransitionSeries requires each sequence to be at least as long as the transition
             durationInFrames = Math.max(durationInFrames, MIN_SEQUENCE_DURATION_FRAMES);
             return {
               type: asset.type,
@@ -61,9 +60,7 @@ export const PlayerDemo: React.FC = () => {
         
         if (!mounted) return;
 
-        const totalFrames =
-          mediaWithDurations.reduce((sum, m) => sum + m.durationInFrames, 0) +
-          (mediaWithDurations.length - 1) * TRANSITION_DURATION_FRAMES;
+        const totalFrames = mediaWithDurations.reduce((sum, m) => sum + m.durationInFrames, 0);
 
         setMedia(mediaWithDurations);
         setTotalDuration(totalFrames);
