@@ -1,6 +1,6 @@
 import { Player } from '@remotion/player';
-import { useEffect, useState } from 'react';
-import { prefetch } from 'remotion';
+import { useEffect, useRef, useState } from 'react';
+import { preloadAudio, preloadImage, preloadVideo } from '@remotion/preload';
 import { VideoSequence, MediaItem } from './VideoSequence';
 import { getVideoMetadata } from './get-video-metadata';
 import { backgroundAudioTracks, mediaAssets } from './media-schema';
@@ -20,12 +20,38 @@ function getMediaUrl(url: string): string {
 /** Minimum duration per clip (avoids zero-length). */
 const MIN_SEQUENCE_DURATION_FRAMES = 1;
 
+const LOADING_PHASES = [
+  'Getting video durations…',
+  'Preloading assets…',
+  'Premounting videos…',
+  'Applying background music…',
+] as const;
+
+/** Option 4: Preload (browser hint only, no full download). Fire-and-forget. */
+function startPreloading(media: MediaItem[]) {
+  const proxiedTracks = backgroundAudioTracks.map((t) => ({
+    ...t,
+    src: getMediaUrl(t.src),
+  }));
+  proxiedTracks.forEach((track) => preloadAudio(track.src));
+
+  media.forEach((item) => {
+    if (item.type === 'video') {
+      preloadVideo(item.src);
+    } else {
+      preloadImage(item.src);
+    }
+  });
+}
+
+const PHASE_INTERVAL_MS = 450;
+
 export const PlayerDemo: React.FC = () => {
   const [media, setMedia] = useState<MediaItem[] | null>(null);
   const [totalDuration, setTotalDuration] = useState<number | null>(null);
-  const [loadingProgress, setLoadingProgress] = useState<{[key: number]: number}>({});
-  const [allPrefetched, setAllPrefetched] = useState(false);
-  const [startedLoading, setStartedLoading] = useState(false);
+  const [metadataReady, setMetadataReady] = useState(false);
+  const [loadingPhase, setLoadingPhase] = useState<string>(LOADING_PHASES[0]);
+  const phaseTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const fps = 30;
 
   useEffect(() => {
@@ -35,11 +61,10 @@ export const PlayerDemo: React.FC = () => {
       src: getMediaUrl(asset.src),
     }));
 
-    const calculateDurationsAndPrefetch = async () => {
+    const loadMetadataAndShowPlayer = async () => {
       try {
-        setStartedLoading(true);
-        
-        // Process all media assets (use proxied URLs in dev to avoid CORS)
+        setLoadingPhase(LOADING_PHASES[0]);
+
         const mediaWithDurations: MediaItem[] = await Promise.all(
           proxiedItems.map(async (asset) => {
             let durationInFrames: number;
@@ -57,82 +82,77 @@ export const PlayerDemo: React.FC = () => {
             };
           })
         );
-        
+
         if (!mounted) return;
 
         const totalFrames = mediaWithDurations.reduce((sum, m) => sum + m.durationInFrames, 0);
-
         setMedia(mediaWithDurations);
         setTotalDuration(totalFrames);
 
-        // Simulate minimum progress for better UX
-        proxiedItems.forEach((_, index) => {
-          setLoadingProgress(prev => ({ ...prev, [index]: 0 }));
-        });
+        // Run through remaining phases in quick sequence so user sees what we're doing
+        setLoadingPhase(LOADING_PHASES[1]);
+        startPreloading(mediaWithDurations);
 
-        // Also prefetch all background audio tracks
-        const audioPrefetches = backgroundAudioTracks.map((track) =>
-          prefetch(track.src, { method: 'blob-url' })
-        );
-
-        // Then, prefetch all media with progress tracking
-        const prefetchPromises = proxiedItems.map((asset, index) => {
-          const { waitUntilDone } = prefetch(asset.src, {
-            method: 'blob-url',
-            onProgress: (progress) => {
-              if (mounted && progress.totalBytes) {
-                const percent = Math.round((progress.loadedBytes / progress.totalBytes) * 100);
-                if (!isNaN(percent)) {
-                  setLoadingProgress(prev => ({ ...prev, [index]: percent }));
-                }
-              }
-            },
-          });
-          return waitUntilDone();
-        });
-
-        // Wait for media and audio to prefetch
-        await Promise.all([
-          ...prefetchPromises,
-          ...audioPrefetches.map((p) => p.waitUntilDone()),
-        ]);
-        
-        // Ensure all show 100% before completing
-        if (mounted) {
-          proxiedItems.forEach((_, index) => {
-            setLoadingProgress(prev => ({ ...prev, [index]: 100 }));
-          });
-          
-          // Small delay to show 100% state
-          await new Promise(resolve => setTimeout(resolve, 300));
-          setAllPrefetched(true);
-        }
+        phaseTimeoutsRef.current = [
+          setTimeout(() => {
+            if (!mounted) return;
+            setLoadingPhase(LOADING_PHASES[2]);
+          }, PHASE_INTERVAL_MS),
+          setTimeout(() => {
+            if (!mounted) return;
+            setLoadingPhase(LOADING_PHASES[3]);
+          }, PHASE_INTERVAL_MS * 2),
+          setTimeout(() => {
+            if (!mounted) return;
+            setMetadataReady(true);
+          }, PHASE_INTERVAL_MS * 3),
+        ];
       } catch (error) {
-        console.error('Error loading media:', error);
-        // Still show player even if prefetch fails
+        console.error('Error loading media metadata:', error);
         if (mounted) {
-          setAllPrefetched(true);
-          if (!totalDuration) {
-            setTotalDuration(900);
-          }
+          setMetadataReady(true);
+          setTotalDuration(900);
         }
       }
     };
 
-    calculateDurationsAndPrefetch();
+    loadMetadataAndShowPlayer();
 
     return () => {
       mounted = false;
+      phaseTimeoutsRef.current.forEach(clearTimeout);
+      phaseTimeoutsRef.current = [];
     };
   }, []);
 
-  if (!totalDuration || !media || !allPrefetched) {
-    const overallProgress = Object.keys(loadingProgress).length > 0
-      ? Math.round(Object.values(loadingProgress).reduce((a, b) => a + b, 0) / mediaAssets.length)
-      : 0;
-
+  if (!totalDuration || !media || !metadataReady) {
     return (
-      <div style={{
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          minHeight: '100dvh',
+          height: '100dvh',
+          backgroundColor: '#1a1a1a',
+          color: '#fff',
+          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+          padding: '2rem',
+          boxSizing: 'border-box',
+        }}
+      >
+        <div style={{ textAlign: 'center', maxWidth: '500px', width: '100%' }}>
+          <h2 style={{ marginBottom: '2rem' }}>Loading…</h2>
+          <p style={{ color: '#888', fontSize: '0.9rem' }}>{loadingPhase}</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      style={{
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
@@ -140,60 +160,21 @@ export const PlayerDemo: React.FC = () => {
         minHeight: '100dvh',
         height: '100dvh',
         backgroundColor: '#1a1a1a',
-        color: '#fff',
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
         padding: '2rem',
-        boxSizing: 'border-box'
-      }}>
-        <div style={{ textAlign: 'center', maxWidth: '500px', width: '100%' }}>
-          <h2 style={{ marginBottom: '2rem' }}>Loading media...</h2>
-          
-          <div style={{
-            width: '100%',
-            height: '8px',
-            backgroundColor: '#333',
-            borderRadius: '4px',
-            overflow: 'hidden',
-            marginBottom: '1rem'
-          }}>
-            <div style={{
-              width: `${overallProgress}%`,
-              height: '100%',
-              backgroundColor: '#3b82f6',
-              transition: 'width 0.3s ease',
-              borderRadius: '4px'
-            }} />
-          </div>
-          
-          <p style={{ color: '#888', fontSize: '0.9rem' }}>
-            {overallProgress}% complete
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div style={{
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      minHeight: '100dvh',
-      height: '100dvh',
-      backgroundColor: '#1a1a1a',
-      padding: '2rem',
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-      boxSizing: 'border-box'
-    }}>
-      <div style={{
-        maxWidth: '1280px',
-        width: '100%',
-        aspectRatio: '16/9',
-        borderRadius: '12px',
-        overflow: 'hidden',
-        boxShadow: '0 20px 60px rgba(0, 0, 0, 0.5)'
-      }}>
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        boxSizing: 'border-box',
+      }}
+    >
+      <div
+        style={{
+          maxWidth: '1280px',
+          width: '100%',
+          aspectRatio: '16/9',
+          borderRadius: '12px',
+          overflow: 'hidden',
+          boxShadow: '0 20px 60px rgba(0, 0, 0, 0.5)',
+        }}
+      >
         <Player
           component={VideoSequence}
           durationInFrames={totalDuration}

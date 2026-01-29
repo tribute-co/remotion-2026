@@ -93,7 +93,7 @@ export const VideoSequence: React.FC<VideoSequenceProps> = ({ media = [], totalD
         </Sequence>
       ))}
 
-      {/* Hard cuts: one Sequence per media item, back-to-back */}
+      {/* Hard cuts: one Sequence per media item; Option 3: premount so next clip can load before visible */}
       {media.map((item, index) => {
         const fromFrame = media
           .slice(0, index)
@@ -103,6 +103,7 @@ export const VideoSequence: React.FC<VideoSequenceProps> = ({ media = [], totalD
             key={`${item.type}-${item.src}-${index}`}
             from={fromFrame}
             durationInFrames={item.durationInFrames}
+            premountFor={90}
           >
             <AbsoluteFill>
               {item.type === 'video' ? (
