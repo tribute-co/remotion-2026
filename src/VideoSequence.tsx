@@ -1,5 +1,15 @@
-import { AbsoluteFill, Audio, Img, Sequence, useCurrentFrame, useVideoConfig, interpolate } from 'remotion';
-import { Video } from '@remotion/media';
+import { useRef } from 'react';
+import {
+  AbsoluteFill,
+  Html5Audio,
+  Html5Video,
+  Img,
+  Sequence,
+  useCurrentFrame,
+  useVideoConfig,
+  interpolate,
+} from 'remotion';
+import { log } from './logger';
 import { AudioAsset, backgroundAudioTracks } from './media-schema';
 
 export interface MediaItem {
@@ -11,20 +21,48 @@ export interface MediaItem {
 export interface VideoSequenceProps {
   media?: MediaItem[];
   totalDurationInFrames?: number;
+  /** When true, mute all audio and video (e.g. default on mobile until user taps). */
+  isMuted?: boolean;
 }
 
 type MediaSegment = { type: 'video' | 'image'; fromFrame: number; toFrame: number };
+
+/** Logs when the current media segment (slide) changes. */
+function SlideChangeLogger({ segments }: { segments: MediaSegment[] }) {
+  const frame = useCurrentFrame();
+  const lastIndexRef = useRef<number | null>(null);
+
+  let currentIndex = -1;
+  for (let i = 0; i < segments.length; i++) {
+    if (frame >= segments[i].fromFrame && frame < segments[i].toFrame) {
+      currentIndex = i;
+      break;
+    }
+  }
+
+  if (currentIndex !== -1 && lastIndexRef.current !== currentIndex) {
+    lastIndexRef.current = currentIndex;
+    const seg = segments[currentIndex];
+    log.slideOnce(
+      currentIndex,
+      `Segment ${currentIndex + 1}/${segments.length}: ${seg.type} (frames ${seg.fromFrame}–${seg.toFrame})`
+    );
+  }
+
+  return null;
+}
 
 /** Background audio volume ducking based on current media segment (image = full, video = ducked). */
 function BackgroundAudioWithDucking({
   track,
   segments,
-  /** Composition frame where this audio Sequence started; useCurrentFrame() inside Sequence is relative. */
   sequenceFromFrame,
+  isMuted,
 }: {
   track: AudioAsset;
   segments: MediaSegment[];
   sequenceFromFrame: number;
+  isMuted: boolean;
 }) {
   const relativeFrame = useCurrentFrame();
   const frame = sequenceFromFrame + relativeFrame; // composition frame for correct segment lookup
@@ -51,10 +89,21 @@ function BackgroundAudioWithDucking({
     }
   }
 
-  return <Audio src={track.src} volume={volume * (track.volume ?? 1)} />;
+  const effectiveVolume = isMuted ? 0 : volume * (track.volume ?? 1);
+  return (
+    <Html5Audio
+      src={track.src}
+      volume={effectiveVolume}
+      useWebAudioApi
+    />
+  );
 }
 
-export const VideoSequence: React.FC<VideoSequenceProps> = ({ media = [], totalDurationInFrames }) => {
+export const VideoSequence: React.FC<VideoSequenceProps> = ({
+  media = [],
+  totalDurationInFrames,
+  isMuted = false,
+}) => {
   const { fps } = useVideoConfig();
   const totalFrames =
     totalDurationInFrames ?? media.reduce((sum, m) => sum + m.durationInFrames, 0);
@@ -82,6 +131,7 @@ export const VideoSequence: React.FC<VideoSequenceProps> = ({ media = [], totalD
 
   return (
     <AbsoluteFill style={{ backgroundColor: '#000' }}>
+      <SlideChangeLogger segments={segments} />
       {/* Background audio: sequential tracks, repeat to fill, volume duck by media type */}
       {audioSegments.map((seg, i) => (
         <Sequence key={i} from={seg.fromFrame} durationInFrames={seg.durationInFrames}>
@@ -89,11 +139,12 @@ export const VideoSequence: React.FC<VideoSequenceProps> = ({ media = [], totalD
             track={backgroundAudioTracks[seg.trackIndex]}
             segments={segments}
             sequenceFromFrame={seg.fromFrame}
+            isMuted={isMuted}
           />
         </Sequence>
       ))}
 
-      {/* Hard cuts: one Sequence per media item; Option 3: premount so next clip can load before visible */}
+      {/* Hard cuts: one Sequence per media item, back-to-back */}
       {media.map((item, index) => {
         const fromFrame = media
           .slice(0, index)
@@ -103,12 +154,12 @@ export const VideoSequence: React.FC<VideoSequenceProps> = ({ media = [], totalD
             key={`${item.type}-${item.src}-${index}`}
             from={fromFrame}
             durationInFrames={item.durationInFrames}
-            premountFor={90}
           >
             <AbsoluteFill>
               {item.type === 'video' ? (
-                <Video
+                <Html5Video
                   src={item.src}
+                  muted={isMuted}
                   style={{
                     width: '100%',
                     height: '100%',
