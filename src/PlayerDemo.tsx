@@ -334,22 +334,6 @@ export const PlayerDemo: React.FC = () => {
           boxShadow: '0 20px 60px rgba(0, 0, 0, 0.5)',
           position: 'relative',
         }}
-        onClick={() => {
-          if (isMuted) {
-            log.player('Unmuted (user tap)');
-            setIsMuted(false);
-          }
-        }}
-        role={isMuted ? 'button' : undefined}
-        tabIndex={isMuted ? 0 : undefined}
-        onKeyDown={(e) => {
-          if (isMuted && (e.key === 'Enter' || e.key === ' ')) {
-            e.preventDefault();
-            log.player('Unmuted (keyboard)');
-            setIsMuted(false);
-          }
-        }}
-        aria-label={isMuted ? 'Tap to unmute' : undefined}
       >
         <Player
           ref={playerRef}
@@ -371,25 +355,44 @@ export const PlayerDemo: React.FC = () => {
             isMuted,
           }}
         />
-        {isMuted && (
-          <div
-            style={{
-              position: 'absolute',
-              inset: 0,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              background: 'rgba(0,0,0,0.4)',
-              color: '#fff',
-              fontSize: '1rem',
-              fontWeight: 500,
-              pointerEvents: 'none',
-              borderRadius: '12px',
-            }}
-          >
-            Tap to unmute
-          </div>
-        )}
+        <button
+          type="button"
+          onClick={() => {
+            log.player(isMuted ? 'Unmuted (mute button)' : 'Muted (mute button)');
+            setIsMuted((m) => !m);
+          }}
+          aria-label={isMuted ? 'Unmute' : 'Mute'}
+          title={isMuted ? 'Unmute' : 'Mute'}
+          style={{
+            position: 'absolute',
+            bottom: '12px',
+            right: '12px',
+            width: '44px',
+            height: '44px',
+            borderRadius: '50%',
+            border: 'none',
+            backgroundColor: 'rgba(0,0,0,0.6)',
+            color: '#fff',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 0,
+          }}
+        >
+          {isMuted ? (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M11 5L6 9H2v6h4l5 4V5z" />
+              <line x1="23" y1="9" x2="17" y2="15" />
+              <line x1="17" y1="9" x2="23" y2="15" />
+            </svg>
+          ) : (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+              <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
+            </svg>
+          )}
+        </button>
       </div>
     </div>
   );
