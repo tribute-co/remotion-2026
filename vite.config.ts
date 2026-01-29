@@ -9,4 +9,9 @@ export default defineConfig({
   build: {
     outDir: 'dist',
   },
+  resolve: {
+    // Ensure a single instance of remotion and React so Player's composition
+    // context is the same one consumed by Sequence/TransitionSeries (useVideoConfig).
+    dedupe: ['remotion', 'react', 'react-dom'],
+  },
 });

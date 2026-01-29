@@ -3,7 +3,7 @@ import { AbsoluteFill, Audio, Img, useCurrentFrame, interpolate } from 'remotion
 import { Video } from '@remotion/media';
 import { TransitionSeries, springTiming } from '@remotion/transitions';
 import { fade } from '@remotion/transitions/fade';
-import { backgroundAudio } from './media-schema';
+import { backgroundAudioTracks } from './media-schema';
 
 export interface MediaItem {
   type: 'video' | 'image';
@@ -15,31 +15,36 @@ export interface VideoSequenceProps {
   media?: MediaItem[];
 }
 
-const AUDIO_SRC = backgroundAudio.src;
-
-// Audio component that adjusts volume based on media type
-const MediaAudio: React.FC<{ type: 'video' | 'image'; nextType?: 'video' | 'image'; durationInFrames: number }> = ({ 
-  type, 
+// Audio component that adjusts volume based on media type; plays all background tracks
+const MediaAudio: React.FC<{ type: 'video' | 'image'; nextType?: 'video' | 'image'; durationInFrames: number }> = ({
+  type,
   nextType,
-  durationInFrames 
+  durationInFrames,
 }) => {
   const frame = useCurrentFrame();
   const targetVolume = type === 'image' ? 1.0 : 0.25;
-  
-  // If there's a next item and we're near the end, start transitioning to next volume
+
   const transitionDuration = 15;
+  let volume: number;
   if (nextType && frame > durationInFrames - transitionDuration) {
     const nextVolume = nextType === 'image' ? 1.0 : 0.25;
-    const volume = interpolate(
+    volume = interpolate(
       frame,
       [durationInFrames - transitionDuration, durationInFrames],
       [targetVolume, nextVolume],
       { extrapolateRight: 'clamp' }
     );
-    return <Audio src={AUDIO_SRC} volume={volume} />;
+  } else {
+    volume = targetVolume;
   }
-  
-  return <Audio src={AUDIO_SRC} volume={targetVolume} />;
+
+  return (
+    <>
+      {backgroundAudioTracks.map((track, i) => (
+        <Audio key={i} src={track.src} volume={volume * (track.volume ?? 1)} />
+      ))}
+    </>
+  );
 };
 
 export const VideoSequence: React.FC<VideoSequenceProps> = ({ media = [] }) => {

@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { prefetch } from 'remotion';
 import { VideoSequence, MediaItem } from './VideoSequence';
 import { getVideoMetadata } from './get-video-metadata';
-import { backgroundAudio, mediaAssets } from './media-schema';
+import { backgroundAudioTracks, mediaAssets } from './media-schema';
 
 // Use proxy in production, direct URLs in development
 const getMediaUrls = () => {
@@ -65,12 +65,10 @@ export const PlayerDemo: React.FC = () => {
           setLoadingProgress(prev => ({ ...prev, [index]: 0 }));
         });
 
-        // Also prefetch the background audio
-        const audioUrl = backgroundAudio.src;
-        
-        const audioPrefetch = prefetch(audioUrl, {
-          method: 'blob-url',
-        });
+        // Also prefetch all background audio tracks
+        const audioPrefetches = backgroundAudioTracks.map((track) =>
+          prefetch(track.src, { method: 'blob-url' })
+        );
 
         // Then, prefetch all media with progress tracking
         const prefetchPromises = mediaItems.map((asset, index) => {
@@ -89,7 +87,10 @@ export const PlayerDemo: React.FC = () => {
         });
 
         // Wait for media and audio to prefetch
-        await Promise.all([...prefetchPromises, audioPrefetch.waitUntilDone()]);
+        await Promise.all([
+          ...prefetchPromises,
+          ...audioPrefetches.map((p) => p.waitUntilDone()),
+        ]);
         
         // Ensure all show 100% before completing
         if (mounted) {
