@@ -45,6 +45,10 @@ export const log = {
   player: (msg: string, ...args: unknown[]) => {
     if (DEBUG) console.log(`${PREFIX} [player]`, msg, ...args);
   },
+  /** Mute state (Player sync, composition isMuted). Use for iOS debugging. */
+  mute: (msg: string, ...args: unknown[]) => {
+    if (DEBUG) console.log(`${PREFIX} [mute]`, msg, ...args);
+  },
   /** General (e.g. mount). */
   app: (msg: string, ...args: unknown[]) => {
     if (DEBUG) console.log(`${PREFIX}`, msg, ...args);
