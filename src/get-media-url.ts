@@ -31,13 +31,5 @@ export function getMediaUrl(url: string): string {
     return url;
   }
 
-  // Video Assets CDN
-  if (url.startsWith(CONFIG.CDN.VIDEO_ASSETS)) {
-    const path = url.slice(CONFIG.CDN.VIDEO_ASSETS.length);
-    return isDev
-      ? `${origin}${CONFIG.PROXY.VIDEO_ASSETS_DEV}${path}`
-      : `${origin}${CONFIG.PROXY.VIDEO_ASSETS_PROD}${path}`;
-  }
-
   return url;
 }

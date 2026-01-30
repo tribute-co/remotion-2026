@@ -6,14 +6,6 @@
   NODE_VERSION = "18"
   BUN_VERSION = "1.1"
 
-# Proxy video requests to bypass CORS
-[[redirects]]
-  from = "/api/videos/*"
-  to = "https://tribute-video-assets.tribute.co/:splat"
-  status = 200
-  force = true
-  headers = {X-From = "Netlify"}
-
 # SPA redirects
 [[redirects]]
   from = "/*"

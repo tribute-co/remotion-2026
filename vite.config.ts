@@ -17,11 +17,6 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/encode-proxy/, ''),
       },
-      '/video-assets-proxy': {
-        target: 'https://tribute-video-assets.tribute.co',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/video-assets-proxy/, ''),
-      },
     },
   },
   build: {

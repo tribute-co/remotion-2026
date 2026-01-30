@@ -31,14 +31,11 @@ export const CONFIG = {
   CDN: {
     PHOTOS_R2: 'https://photos-r2.tribute.co',
     ENCODE: 'https://tribute-production-encode.b-cdn.net',
-    VIDEO_ASSETS: 'https://tribute-video-assets.tribute.co',
   },
 
   /** Proxy paths (dev uses Vite proxy, production uses Netlify proxy) */
   PROXY: {
     PHOTOS_R2: '/photos-r2-proxy',
     ENCODE: '/encode-proxy',
-    VIDEO_ASSETS_DEV: '/video-assets-proxy',
-    VIDEO_ASSETS_PROD: '/api/videos',
   },
 } as const;
