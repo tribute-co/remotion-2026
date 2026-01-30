@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@remotion/media": "4.0.410",
     "@remotion/player": "4.0.410",
     "@remotion/transitions": "4.0.410",
     "react": "^18.3.1",

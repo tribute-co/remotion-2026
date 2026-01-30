@@ -2,21 +2,15 @@ import { useRef } from 'react';
 import {
   AbsoluteFill,
   Html5Audio,
-  Html5Video,
   Img,
   Sequence,
   useCurrentFrame,
   useVideoConfig,
   interpolate,
 } from 'remotion';
+import { Video } from '@remotion/media';
 import { getMediaUrl } from './get-media-url';
 import { AudioAsset, backgroundAudioTracks } from './media-schema';
-
-/**
- * Set to false to disable background music everywhere (useful to test if bg music
- * is causing slide 2+ videos to lose unmuted state on mobile).
- */
-const ENABLE_BACKGROUND_MUSIC = true;
 
 /** Premount sequences this many frames before they start (gives time to load before visible). */
 const PREMOUNT_FRAMES = 30; // 1 second at 30fps
@@ -51,9 +45,8 @@ function PremountedMedia({
   return (
     <AbsoluteFill style={{ opacity: isPremount ? 0 : 1, pointerEvents: isPremount ? 'none' : 'auto' }}>
       {item.type === 'video' ? (
-        <Html5Video
+        <Video
           src={item.src}
-          pauseWhenBuffering
           muted={isMuted}
           style={{
             width: '100%',
@@ -164,21 +157,17 @@ export const VideoSequence: React.FC<VideoSequenceProps> = ({
     offset += item.durationInFrames;
   }
 
-  // Background audio: play tracks in order, repeat to fill composition (optional; disable to test mobile unmute)
-  const trackDurationsFrames = ENABLE_BACKGROUND_MUSIC
-    ? backgroundAudioTracks.map((t) => Math.ceil(t.durationInSeconds * fps))
-    : [];
+  // Background audio: play tracks in order, repeat to fill composition
+  const trackDurationsFrames = backgroundAudioTracks.map((t) => Math.ceil(t.durationInSeconds * fps));
   const audioSegments: { trackIndex: number; fromFrame: number; durationInFrames: number }[] = [];
-  if (ENABLE_BACKGROUND_MUSIC) {
-    let frame = 0;
-    let trackIndex = 0;
-    while (frame < totalFrames) {
-      const durationInFrames = trackDurationsFrames[trackIndex % backgroundAudioTracks.length];
-      const duration = Math.min(durationInFrames, totalFrames - frame);
-      audioSegments.push({ trackIndex: trackIndex % backgroundAudioTracks.length, fromFrame: frame, durationInFrames: duration });
-      frame += duration;
-      trackIndex++;
-    }
+  let frame = 0;
+  let trackIndex = 0;
+  while (frame < totalFrames) {
+    const durationInFrames = trackDurationsFrames[trackIndex % backgroundAudioTracks.length];
+    const duration = Math.min(durationInFrames, totalFrames - frame);
+    audioSegments.push({ trackIndex: trackIndex % backgroundAudioTracks.length, fromFrame: frame, durationInFrames: duration });
+    frame += duration;
+    trackIndex++;
   }
 
   return (
