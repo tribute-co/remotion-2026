@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useRef } from 'react';
 import {
   AbsoluteFill,
   Html5Audio,
@@ -85,15 +85,6 @@ function SlideChangeLogger({ segments }: { segments: MediaSegment[] }) {
 
   if (currentIndex !== -1 && lastIndexRef.current !== currentIndex) {
     lastIndexRef.current = currentIndex;
-    const seg = segments[currentIndex];
-    console.log(
-      '[Remotion] [slide] Segment %s/%s: %s (frames %s–%s)',
-      currentIndex + 1,
-      segments.length,
-      seg.type,
-      seg.fromFrame,
-      seg.toFrame
-    );
   }
 
   return null;
@@ -111,11 +102,6 @@ function BackgroundAudioWithDucking({
   sequenceFromFrame: number;
   isMuted: boolean;
 }) {
-  const prevMutedRef = useRef<boolean | undefined>(undefined);
-  if (prevMutedRef.current !== isMuted) {
-    console.log('[Remotion] [mute] bg audio muted=%s (track: %s)', isMuted, track.src.split('/').pop() ?? track.src);
-    prevMutedRef.current = isMuted;
-  }
   const relativeFrame = useCurrentFrame();
   const frame = sequenceFromFrame + relativeFrame; // composition frame for correct segment lookup
   const crossfadeFrames = 10;
@@ -160,18 +146,6 @@ export const VideoSequence: React.FC<VideoSequenceProps> = ({
   isMuted = true, // default muted so bg music muted on first frame until Player syncs
 }) => {
   const { fps } = useVideoConfig();
-  const prevMutedRef = useRef<boolean | null>(null);
-  const didLogFirstRef = useRef(false);
-  useEffect(() => {
-    if (!didLogFirstRef.current) {
-      console.log('[Remotion] [mute] composition first render: isMuted=%s', isMuted);
-      didLogFirstRef.current = true;
-    }
-    if (prevMutedRef.current !== isMuted) {
-      console.log('[Remotion] [mute] composition isMuted=%s (prev=%s)', isMuted, prevMutedRef.current);
-      prevMutedRef.current = isMuted;
-    }
-  }, [isMuted]);
 
   const totalFrames =
     totalDurationInFrames ?? media.reduce((sum, m) => sum + m.durationInFrames, 0);

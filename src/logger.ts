@@ -52,9 +52,8 @@ export const log = {
   player: (msg: string, ...args: unknown[]) => {
     if (DEBUG) console.log(`${PREFIX} [player]`, msg, ...args);
   },
-  /** Mute state (Player sync, composition isMuted). Always logs so you can debug on device without URL param. */
   mute: (msg: string, ...args: unknown[]) => {
-    console.log(`${PREFIX} [mute]`, msg, ...args);
+    if (DEBUG) console.log(`${PREFIX} [mute]`, msg, ...args);
   },
   /** General (e.g. mount). */
   app: (msg: string, ...args: unknown[]) => {
