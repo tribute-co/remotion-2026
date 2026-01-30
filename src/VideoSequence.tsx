@@ -4,6 +4,7 @@ import {
   Html5Audio,
   Html5Video,
   Img,
+  Internals,
   Sequence,
   useCurrentFrame,
   useVideoConfig,
@@ -148,9 +149,13 @@ function BackgroundAudioWithDucking({
 export const VideoSequence: React.FC<VideoSequenceProps> = ({
   media = [],
   totalDurationInFrames,
-  isMuted = true, // default muted so bg music is muted on first frame (e.g. mobile) until Player syncs
+  isMuted: isMutedProp = true,
 }) => {
   const { fps } = useVideoConfig();
+  // Use Player's mute context so both bg music and video follow the mute button (fixes iOS where inputProps didn't sync)
+  const [mediaMuted] = Internals.useMediaMutedState();
+  const isMuted = mediaMuted ?? isMutedProp;
+
   const totalFrames =
     totalDurationInFrames ?? media.reduce((sum, m) => sum + m.durationInFrames, 0);
 
