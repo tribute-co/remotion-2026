@@ -9,7 +9,11 @@ export interface VideoMetadata {
   fps: number | null;
 }
 
-export const getVideoMetadata = async (src: string): Promise<VideoMetadata> => {
+/**
+ * Extracts metadata from a video file using mediabunny.
+ * Returns duration, dimensions, and frame rate.
+ */
+export async function getVideoMetadata(src: string): Promise<VideoMetadata> {
   const input = new Input({
     formats: ALL_FORMATS,
     source: new UrlSource(src, {
@@ -17,22 +21,27 @@ export const getVideoMetadata = async (src: string): Promise<VideoMetadata> => {
     }),
   });
 
-  const durationInSeconds = await input.computeDuration();
-  const videoTrack = await input.getPrimaryVideoTrack();
-  const dimensions = videoTrack
-    ? {
-        width: videoTrack.displayWidth,
-        height: videoTrack.displayHeight,
-      }
-    : null;
-  const packetStats = await videoTrack?.computePacketStats(50);
-  const fps = packetStats?.averagePacketRate ?? null;
+  try {
+    const durationInSeconds = await input.computeDuration();
+    const videoTrack = await input.getPrimaryVideoTrack();
 
-  input.dispose();
+    const dimensions = videoTrack
+      ? {
+          width: videoTrack.displayWidth,
+          height: videoTrack.displayHeight,
+        }
+      : null;
 
-  return {
-    durationInSeconds,
-    dimensions,
-    fps,
-  };
-};
+    const packetStats = await videoTrack?.computePacketStats(50);
+    const fps = packetStats?.averagePacketRate ?? null;
+
+    return {
+      durationInSeconds,
+      dimensions,
+      fps,
+    };
+  } finally {
+    // Always dispose to free resources
+    input.dispose();
+  }
+}
