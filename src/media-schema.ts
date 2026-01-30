@@ -1,18 +1,11 @@
-// Media Schema - Central configuration for all video, image, and audio assets
+// Media Schema - Central configuration for all video and image assets
 
-export type MediaType = 'video' | 'image' | 'audio';
+export type MediaType = 'video' | 'image';
 
 export interface MediaAsset {
   type: MediaType;
   src: string;
-  durationInSeconds?: number; // For images and audio, specify duration. For videos, it's computed.
-}
-
-export interface AudioAsset {
-  src: string;
-  volume?: number;
-  /** Duration in seconds (required for sequenced playback so tracks play in order and repeat). */
-  durationInSeconds: number;
+  durationInSeconds?: number; // For images, specify duration. For videos, it's computed.
 }
 
 export const mediaAssets: MediaAsset[] = [
@@ -149,18 +142,4 @@ export const mediaAssets: MediaAsset[] = [
   { type: 'video', src: 'https://tribute-production-encode.b-cdn.net/0f/c919603bc54a62aec68325d429d005/78742039456__EB252328-2AE7-4917-9CC1-08A56C1F3677.mp4' },
   { type: 'video', src: 'https://tribute-production-encode.b-cdn.net/68/1e8c5e6acc4dc6a02552f06dcafce8/IMG_0272.mp4' },
   { type: 'video', src: 'https://tribute-production-encode.b-cdn.net/ff/f4f2c5c0344549b7635e1639bb29d1/IMG_8753.mp4' },
-];
-
-/** Background music/ambience – tracks play in order and repeat to fill the sequence. */
-export const backgroundAudioTracks: AudioAsset[] = [
-  {
-    src: `https://tribute-video-assets.tribute.co/Sailors_Lament_128k.mp3`,
-    volume: 0.5,
-    durationInSeconds: 188,
-  },
-  {
-    src: `https://tribute-video-assets.tribute.co/Golden_Days_128k.mp3`,
-    volume: 0.5,
-    durationInSeconds: 187,
-  },
 ];

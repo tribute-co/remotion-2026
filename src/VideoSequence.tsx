@@ -1,16 +1,11 @@
 import { useRef } from 'react';
 import {
   AbsoluteFill,
-  Html5Audio,
   Img,
   Sequence,
   useCurrentFrame,
-  useVideoConfig,
-  interpolate,
 } from 'remotion';
 import { Video } from '@remotion/media';
-import { getMediaUrl } from './get-media-url';
-import { AudioAsset, backgroundAudioTracks } from './media-schema';
 
 /** Premount sequences this many frames before they start (gives time to load before visible). */
 const PREMOUNT_FRAMES = 30; // 1 second at 30fps
@@ -24,7 +19,7 @@ export interface MediaItem {
 export interface VideoSequenceProps {
   media?: MediaItem[];
   totalDurationInFrames?: number;
-  /** When true, composition audio/video are muted. Synced from Player so unmute works on iOS. */
+  /** When true, composition videos are muted. Synced from Player so unmute works on iOS. */
   isMuted?: boolean;
 }
 
@@ -89,63 +84,11 @@ function SlideChangeLogger({ segments }: { segments: MediaSegment[] }) {
   return null;
 }
 
-/** Background audio volume ducking based on current media segment (image = full, video = ducked). */
-function BackgroundAudioWithDucking({
-  track,
-  segments,
-  sequenceFromFrame,
-  isMuted,
-}: {
-  track: AudioAsset;
-  segments: MediaSegment[];
-  sequenceFromFrame: number;
-  isMuted: boolean;
-}) {
-  const relativeFrame = useCurrentFrame();
-  const frame = sequenceFromFrame + relativeFrame; // composition frame for correct segment lookup
-  const crossfadeFrames = 10;
-
-  let volume = 0.15; // default ducked
-  for (let i = 0; i < segments.length; i++) {
-    const seg = segments[i];
-    const nextSeg = segments[i + 1];
-    if (frame >= seg.fromFrame && frame < seg.toFrame) {
-      const targetVolume = seg.type === 'image' ? 1.0 : 0.15;
-      if (nextSeg && frame > seg.toFrame - crossfadeFrames) {
-        const nextVolume = nextSeg.type === 'image' ? 1.0 : 0.15;
-        volume = interpolate(
-          frame,
-          [seg.toFrame - crossfadeFrames, seg.toFrame],
-          [targetVolume, nextVolume],
-          { extrapolateRight: 'clamp' }
-        );
-      } else {
-        volume = targetVolume;
-      }
-      break;
-    }
-  }
-
-  // When muted, force volume to 0 so bg stays silent on iOS (muted prop can apply late with useWebAudioApi)
-  const effectiveVolume = isMuted ? 0 : volume * (track.volume ?? 1);
-  return (
-    <Html5Audio
-      src={getMediaUrl(track.src)}
-      volume={effectiveVolume}
-      useWebAudioApi
-      pauseWhenBuffering
-      muted={isMuted}
-    />
-  );
-}
-
 export const VideoSequence: React.FC<VideoSequenceProps> = ({
   media = [],
   totalDurationInFrames,
-  isMuted = true, // default muted so bg music muted on first frame until Player syncs
+  isMuted = true,
 }) => {
-  const { fps } = useVideoConfig();
-
   const totalFrames =
     totalDurationInFrames ?? media.reduce((sum, m) => sum + m.durationInFrames, 0);
 
@@ -157,38 +100,9 @@ export const VideoSequence: React.FC<VideoSequenceProps> = ({
     offset += item.durationInFrames;
   }
 
-  // Background audio: play tracks in order, repeat to fill composition
-  const trackDurationsFrames = backgroundAudioTracks.map((t) => Math.ceil(t.durationInSeconds * fps));
-  const audioSegments: { trackIndex: number; fromFrame: number; durationInFrames: number }[] = [];
-  let frame = 0;
-  let trackIndex = 0;
-  while (frame < totalFrames) {
-    const durationInFrames = trackDurationsFrames[trackIndex % backgroundAudioTracks.length];
-    const duration = Math.min(durationInFrames, totalFrames - frame);
-    audioSegments.push({ trackIndex: trackIndex % backgroundAudioTracks.length, fromFrame: frame, durationInFrames: duration });
-    frame += duration;
-    trackIndex++;
-  }
-
   return (
     <AbsoluteFill style={{ backgroundColor: '#000' }}>
       <SlideChangeLogger segments={segments} />
-      {/* Background audio: sequential tracks, repeat to fill, volume duck by media type */}
-      {audioSegments.map((seg, i) => (
-        <Sequence
-          key={i}
-          from={Math.max(0, seg.fromFrame - PREMOUNT_FRAMES)}
-          durationInFrames={seg.durationInFrames + PREMOUNT_FRAMES}
-        >
-          <BackgroundAudioWithDucking
-            track={backgroundAudioTracks[seg.trackIndex]}
-            segments={segments}
-            sequenceFromFrame={seg.fromFrame}
-            isMuted={isMuted}
-          />
-        </Sequence>
-      ))}
-
       {/* Hard cuts: one Sequence per media item, back-to-back, premounted */}
       {media.map((item, index) => {
         const fromFrame = media
