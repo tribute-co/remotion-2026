@@ -1,9 +1,10 @@
 [build]
-  command = "npm install && npm run build"
+  command = "bun install && bun run build"
   publish = "dist"
 
 [build.environment]
   NODE_VERSION = "18"
+  BUN_VERSION = "1.1"
 
 # Proxy video requests to bypass CORS
 [[redirects]]
