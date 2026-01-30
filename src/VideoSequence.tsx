@@ -148,7 +148,7 @@ function BackgroundAudioWithDucking({
 export const VideoSequence: React.FC<VideoSequenceProps> = ({
   media = [],
   totalDurationInFrames,
-  isMuted = false,
+  isMuted = true, // default muted so bg music is muted on first frame (e.g. mobile) until Player syncs
 }) => {
   const { fps } = useVideoConfig();
   const totalFrames =

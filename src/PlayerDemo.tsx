@@ -34,15 +34,29 @@ export const PlayerDemo: React.FC = () => {
   const initiallyMuted = typeof window !== 'undefined' && isMobileOrTablet();
   const [isMuted, setIsMuted] = useState(initiallyMuted);
 
-  // Keep composition in sync with Player mute state (fixes iOS where unmuting did nothing)
+  // Keep composition in sync with Player mute state (fixes iOS: bg music + video both follow mute button)
   useEffect(() => {
-    const player = playerRef.current;
-    if (!player) return;
-    const onMuteChange = (e: { detail: { isMuted: boolean } }) => setIsMuted(e.detail.isMuted);
-    player.addEventListener('mutechange', onMuteChange);
-    setIsMuted(player.isMuted());
-    return () => player.removeEventListener('mutechange', onMuteChange);
-  }, [totalDuration]); // re-subscribe when player is ready (media loaded)
+    if (!totalDuration) return;
+    let cancelled = false;
+    let removeListener: (() => void) | undefined;
+    const setup = () => {
+      const player = playerRef.current;
+      if (!player) {
+        setTimeout(setup, 0);
+        return;
+      }
+      if (cancelled) return;
+      const onMuteChange = (e: { detail: { isMuted: boolean } }) => setIsMuted(e.detail.isMuted);
+      player.addEventListener('mutechange', onMuteChange);
+      setIsMuted(player.isMuted());
+      removeListener = () => player.removeEventListener('mutechange', onMuteChange);
+    };
+    setup();
+    return () => {
+      cancelled = true;
+      removeListener?.();
+    };
+  }, [totalDuration]);
 
   useEffect(() => {
     let mounted = true;
