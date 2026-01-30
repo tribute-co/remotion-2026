@@ -1,21 +1,10 @@
 import { Player, PlayerRef } from '@remotion/player';
 import { useEffect, useRef, useState } from 'react';
-import { VideoSequence, MediaItem } from './VideoSequence';
+import { getMediaUrl } from './get-media-url';
 import { getVideoMetadata } from './get-video-metadata';
 import { log } from './logger';
 import { mediaAssets } from './media-schema';
-
-/** In dev, rewrite CDN URLs to same-origin proxy to avoid CORS. Production uses direct URLs. */
-function getMediaUrl(url: string): string {
-  if (import.meta.env.DEV && typeof window !== 'undefined') {
-    const origin = window.location.origin;
-    if (url.startsWith('https://photos-r2.tribute.co/'))
-      return `${origin}/photos-r2-proxy${url.slice('https://photos-r2.tribute.co'.length)}`;
-    if (url.startsWith('https://tribute-production-encode.b-cdn.net/'))
-      return `${origin}/encode-proxy${url.slice('https://tribute-production-encode.b-cdn.net'.length)}`;
-  }
-  return url;
-}
+import { VideoSequence, MediaItem } from './VideoSequence';
 
 /** Minimum duration per clip (avoids zero-length). */
 const MIN_SEQUENCE_DURATION_FRAMES = 1;
@@ -38,28 +27,22 @@ export const PlayerDemo: React.FC = () => {
   const [totalDuration, setTotalDuration] = useState<number | null>(null);
   const fps = 30;
   const playerRef = useRef<PlayerRef>(null);
-  // Sync with Player's mute state (starts muted on mobile via initiallyMuted prop)
-  const [isMuted, setIsMuted] = useState(
-    () => typeof window !== 'undefined' && isMobileOrTablet()
-  );
   const [loadError, setLoadError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
 
-  // Sync our isMuted state with Player's mute state
+  // Start muted on mobile (Player's initiallyMuted). Sync Player mute state into composition so unmute actually plays audio on iOS.
+  const initiallyMuted = typeof window !== 'undefined' && isMobileOrTablet();
+  const [isMuted, setIsMuted] = useState(initiallyMuted);
+
+  // Keep composition in sync with Player mute state (fixes iOS where unmuting did nothing)
   useEffect(() => {
     const player = playerRef.current;
     if (!player) return;
-
-    const onMuteChange = (e: { detail: { isMuted: boolean } }) => {
-      log.player(e.detail.isMuted ? 'Muted (Player controls)' : 'Unmuted (Player controls)');
-      setIsMuted(e.detail.isMuted);
-    };
-
+    const onMuteChange = (e: { detail: { isMuted: boolean } }) => setIsMuted(e.detail.isMuted);
     player.addEventListener('mutechange', onMuteChange);
-    return () => {
-      player.removeEventListener('mutechange', onMuteChange);
-    };
-  }, []);
+    setIsMuted(player.isMuted());
+    return () => player.removeEventListener('mutechange', onMuteChange);
+  }, [totalDuration]); // re-subscribe when player is ready (media loaded)
 
   useEffect(() => {
     let mounted = true;
@@ -226,7 +209,7 @@ export const PlayerDemo: React.FC = () => {
           }}
           controls
           autoPlay={false}
-          initiallyMuted={typeof window !== 'undefined' && isMobileOrTablet()}
+          initiallyMuted={initiallyMuted}
           inputProps={{
             media,
             totalDurationInFrames: totalDuration,

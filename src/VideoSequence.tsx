@@ -9,6 +9,7 @@ import {
   useVideoConfig,
   interpolate,
 } from 'remotion';
+import { getMediaUrl } from './get-media-url';
 import { log } from './logger';
 import { AudioAsset, backgroundAudioTracks } from './media-schema';
 
@@ -24,7 +25,7 @@ export interface MediaItem {
 export interface VideoSequenceProps {
   media?: MediaItem[];
   totalDurationInFrames?: number;
-  /** When true, mute all audio and video (e.g. default on mobile until user taps). */
+  /** When true, composition audio/video are muted. Synced from Player so unmute works on iOS. */
   isMuted?: boolean;
 }
 
@@ -33,12 +34,12 @@ type MediaSegment = { type: 'video' | 'image'; fromFrame: number; toFrame: numbe
 /** Media component that mounts early (for loading) but only visible during its window. */
 function PremountedMedia({
   item,
-  isMuted,
   premountOffset,
+  isMuted,
 }: {
   item: MediaItem;
-  isMuted: boolean;
   premountOffset: number;
+  isMuted: boolean;
 }) {
   const frame = useCurrentFrame();
   const isPremount = frame < premountOffset;
@@ -47,8 +48,8 @@ function PremountedMedia({
       {item.type === 'video' ? (
         <Html5Video
           src={item.src}
-          muted={isMuted}
           pauseWhenBuffering
+          muted={isMuted}
           style={{
             width: '100%',
             height: '100%',
@@ -132,13 +133,14 @@ function BackgroundAudioWithDucking({
     }
   }
 
-  const effectiveVolume = isMuted ? 0 : volume * (track.volume ?? 1);
+  const effectiveVolume = volume * (track.volume ?? 1);
   return (
     <Html5Audio
-      src={track.src}
+      src={getMediaUrl(track.src)}
       volume={effectiveVolume}
       useWebAudioApi
       pauseWhenBuffering
+      muted={isMuted}
     />
   );
 }
@@ -207,8 +209,8 @@ export const VideoSequence: React.FC<VideoSequenceProps> = ({
           >
             <PremountedMedia
               item={item}
-              isMuted={isMuted}
               premountOffset={premountOffset}
+              isMuted={isMuted}
             />
           </Sequence>
         );
