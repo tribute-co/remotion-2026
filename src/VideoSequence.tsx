@@ -10,7 +10,6 @@ import {
   interpolate,
 } from 'remotion';
 import { getMediaUrl } from './get-media-url';
-import { log } from './logger';
 import { AudioAsset, backgroundAudioTracks } from './media-schema';
 
 /** Premount sequences this many frames before they start (gives time to load before visible). */
@@ -87,9 +86,13 @@ function SlideChangeLogger({ segments }: { segments: MediaSegment[] }) {
   if (currentIndex !== -1 && lastIndexRef.current !== currentIndex) {
     lastIndexRef.current = currentIndex;
     const seg = segments[currentIndex];
-    log.slideOnce(
-      currentIndex,
-      `Segment ${currentIndex + 1}/${segments.length}: ${seg.type} (frames ${seg.fromFrame}–${seg.toFrame})`
+    console.log(
+      '[Remotion] [slide] Segment %s/%s: %s (frames %s–%s)',
+      currentIndex + 1,
+      segments.length,
+      seg.type,
+      seg.fromFrame,
+      seg.toFrame
     );
   }
 
@@ -108,6 +111,11 @@ function BackgroundAudioWithDucking({
   sequenceFromFrame: number;
   isMuted: boolean;
 }) {
+  const prevMutedRef = useRef<boolean | undefined>(undefined);
+  if (prevMutedRef.current !== isMuted) {
+    console.log('[Remotion] [mute] bg audio muted=%s (track: %s)', isMuted, track.src.split('/').pop() ?? track.src);
+    prevMutedRef.current = isMuted;
+  }
   const relativeFrame = useCurrentFrame();
   const frame = sequenceFromFrame + relativeFrame; // composition frame for correct segment lookup
   const crossfadeFrames = 10;
@@ -152,9 +160,14 @@ export const VideoSequence: React.FC<VideoSequenceProps> = ({
 }) => {
   const { fps } = useVideoConfig();
   const prevMutedRef = useRef<boolean | null>(null);
+  const didLogFirstRef = useRef(false);
   useEffect(() => {
+    if (!didLogFirstRef.current) {
+      console.log('[Remotion] [mute] composition first render: isMuted=%s', isMuted);
+      didLogFirstRef.current = true;
+    }
     if (prevMutedRef.current !== isMuted) {
-      log.mute('composition isMuted=%s (prev=%s)', isMuted, prevMutedRef.current);
+      console.log('[Remotion] [mute] composition isMuted=%s (prev=%s)', isMuted, prevMutedRef.current);
       prevMutedRef.current = isMuted;
     }
   }, [isMuted]);

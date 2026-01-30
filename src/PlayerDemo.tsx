@@ -2,7 +2,6 @@ import { Player, PlayerRef } from '@remotion/player';
 import { useEffect, useRef, useState } from 'react';
 import { getMediaUrl } from './get-media-url';
 import { getVideoMetadata } from './get-video-metadata';
-import { log } from './logger';
 import { mediaAssets } from './media-schema';
 import { VideoSequence, MediaItem } from './VideoSequence';
 
@@ -35,8 +34,12 @@ export const PlayerDemo: React.FC = () => {
   const [isMuted, setIsMuted] = useState(initiallyMuted);
 
   useEffect(() => {
-    log.mute('init: initiallyMuted=%s, isMuted state=%s', initiallyMuted, isMuted);
+    console.log('[Remotion] [mute] init: initiallyMuted=%s, isMuted state=%s', initiallyMuted, isMuted);
   }, []); // once on mount
+
+  useEffect(() => {
+    console.log('[Remotion] [mute] parent isMuted state -> %s (passed in inputProps to Player)', isMuted);
+  }, [isMuted]);
 
   // Keep composition in sync with Player mute state (fixes iOS: bg music + video both follow mute button)
   useEffect(() => {
@@ -49,14 +52,14 @@ export const PlayerDemo: React.FC = () => {
       if (!player) {
         retries += 1;
         if (retries <= 50) setTimeout(setup, 0);
-        else log.mute('sync: player ref never set after %s retries', retries);
+        else console.log('[Remotion] [mute] sync: player ref never set after %s retries', retries);
         return;
       }
       if (cancelled) return;
       const playerMuted = player.isMuted();
-      log.mute('sync: player ref found, player.isMuted()=%s, setting isMuted state', playerMuted);
+      console.log('[Remotion] [mute] sync: player ref found, player.isMuted()=%s, setting isMuted state', playerMuted);
       const onMuteChange = (e: { detail: { isMuted: boolean } }) => {
-        log.mute('mutechange: isMuted=%s', e.detail.isMuted);
+        console.log('[Remotion] [mute] mutechange: isMuted=%s', e.detail.isMuted);
         setIsMuted(e.detail.isMuted);
       };
       player.addEventListener('mutechange', onMuteChange);
@@ -100,14 +103,14 @@ export const PlayerDemo: React.FC = () => {
 
     const runWithRetries = async () => {
       setLoadError(null);
-      log.prefetchOnce('start', 'Starting: computing durations for all media');
+      console.log('[Remotion] [prefetch] Starting: computing durations for all media');
 
       let lastError: unknown;
       for (let attempt = 1; attempt <= DURATION_RETRY_ATTEMPTS; attempt++) {
         if (!mounted) return;
         try {
           if (attempt > 1) {
-            log.prefetch(`Retry ${attempt}/${DURATION_RETRY_ATTEMPTS} (duration calculation)`);
+            console.log('[Remotion] [prefetch] Retry %s/%s (duration calculation)', attempt, DURATION_RETRY_ATTEMPTS);
             await new Promise((r) => setTimeout(r, DURATION_RETRY_DELAY_MS));
             if (!mounted) return;
           }
@@ -116,7 +119,7 @@ export const PlayerDemo: React.FC = () => {
           const totalFrames = mediaWithDurations.reduce((sum, m) => sum + m.durationInFrames, 0);
           setMedia(mediaWithDurations);
           setTotalDuration(totalFrames);
-          log.prefetchOnce('player-ready', 'Player ready (durations calculated)');
+          console.log('[Remotion] [prefetch] Player ready (durations calculated)');
           return;
         } catch (err) {
           lastError = err;

@@ -1,14 +1,21 @@
 /**
- * Basic app logging. Only logs when DEV or when REMOTION_DEBUG=1 (e.g. in env).
- * Use for prefetch, slide changes, etc.
- * Note: We use prefetch (blob-url) only; we do not use Remotion preload or premount.
+ * Basic app logging. Logs when:
+ * - DEV, or REMOTION_DEBUG=1 at build time, or
+ * - URL has ?remotion_debug=1 (so you can debug on device without rebuilding).
+ * Use for prefetch, slide changes, mute state, etc.
  * Dedupe keys avoid duplicate logs from React Strict Mode (double-invoke) or multiple instances.
- * If you see "Initial prefetch" etc. again later, it's usually HMR (file save in dev) or the
- * component remounting; the dedupe Set is cleared when this module is re-executed.
  */
-const DEBUG =
-  import.meta.env.DEV ||
-  (typeof import.meta.env !== 'undefined' && String(import.meta.env?.REMOTION_DEBUG) === '1');
+function isDebugEnabled(): boolean {
+  if (import.meta.env.DEV) return true;
+  if (typeof import.meta.env !== 'undefined' && String(import.meta.env?.REMOTION_DEBUG) === '1')
+    return true;
+  if (typeof window !== 'undefined' && window.location?.search) {
+    const q = window.location.search;
+    if (q.includes('remotion_debug=1') || q.includes('debug=1')) return true;
+  }
+  return false;
+}
+const DEBUG = isDebugEnabled();
 
 const PREFIX = '[Remotion]';
 
@@ -45,9 +52,9 @@ export const log = {
   player: (msg: string, ...args: unknown[]) => {
     if (DEBUG) console.log(`${PREFIX} [player]`, msg, ...args);
   },
-  /** Mute state (Player sync, composition isMuted). Use for iOS debugging. */
+  /** Mute state (Player sync, composition isMuted). Always logs so you can debug on device without URL param. */
   mute: (msg: string, ...args: unknown[]) => {
-    if (DEBUG) console.log(`${PREFIX} [mute]`, msg, ...args);
+    console.log(`${PREFIX} [mute]`, msg, ...args);
   },
   /** General (e.g. mount). */
   app: (msg: string, ...args: unknown[]) => {
