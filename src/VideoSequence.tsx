@@ -141,7 +141,8 @@ function BackgroundAudioWithDucking({
     }
   }
 
-  const effectiveVolume = volume * (track.volume ?? 1);
+  // When muted, force volume to 0 so bg stays silent on iOS (muted prop can apply late with useWebAudioApi)
+  const effectiveVolume = isMuted ? 0 : volume * (track.volume ?? 1);
   return (
     <Html5Audio
       src={getMediaUrl(track.src)}
