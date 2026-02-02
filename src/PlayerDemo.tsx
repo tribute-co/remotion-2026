@@ -1,14 +1,10 @@
 import { Player, PlayerRef } from '@remotion/player';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { CONFIG } from './config';
 import { getMediaUrl } from './get-media-url';
 import { getVideoMetadata } from './get-video-metadata';
 import { mediaAssets } from './media-schema';
 import { VideoSequence, MediaItem } from './VideoSequence';
-
-const FPS = 30;
-const MIN_DURATION_FRAMES = 1;
-const RETRY_ATTEMPTS = 3;
-const RETRY_DELAY_MS = 2000;
 
 function isMobileOrTablet(): boolean {
   if (typeof navigator === 'undefined') return false;
@@ -32,13 +28,13 @@ async function calculateMediaDurations(fps: number): Promise<MediaItem[]> {
         const metadata = await getVideoMetadata(asset.src);
         durationInFrames = Math.ceil(metadata.durationInSeconds * fps);
       } else {
-        durationInFrames = Math.ceil((asset.durationInSeconds ?? 3) * fps);
+        durationInFrames = Math.ceil((asset.durationInSeconds ?? CONFIG.DEFAULT_IMAGE_DURATION_SECONDS) * fps);
       }
 
       return {
         type: asset.type,
         src: asset.src,
-        durationInFrames: Math.max(durationInFrames, MIN_DURATION_FRAMES),
+        durationInFrames: Math.max(durationInFrames, CONFIG.MIN_DURATION_FRAMES),
       };
     })
   );
@@ -58,16 +54,16 @@ export const PlayerDemo: React.FC = () => {
       setLoadError(null);
       let lastError: unknown;
 
-      for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt++) {
+      for (let attempt = 1; attempt <= CONFIG.RETRY.ATTEMPTS; attempt++) {
         if (!mounted) return;
 
         try {
           if (attempt > 1) {
-            await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+            await new Promise((resolve) => setTimeout(resolve, CONFIG.RETRY.DELAY_MS));
             if (!mounted) return;
           }
 
-          const mediaWithDurations = await calculateMediaDurations(FPS);
+          const mediaWithDurations = await calculateMediaDurations(CONFIG.FPS);
           if (!mounted) return;
 
           const totalFrames = mediaWithDurations.reduce(
@@ -97,6 +93,11 @@ export const PlayerDemo: React.FC = () => {
       mounted = false;
     };
   }, [retryCount]);
+
+  // Memoize inputProps to avoid unnecessary re-renders (best practice)
+  const inputProps = useMemo(() => {
+    return { media: media ?? [] };
+  }, [media]);
 
   const containerStyle: React.CSSProperties = {
     display: 'flex',
@@ -167,9 +168,9 @@ export const PlayerDemo: React.FC = () => {
           ref={playerRef}
           component={VideoSequence}
           durationInFrames={totalDuration}
-          fps={FPS}
-          compositionWidth={1920}
-          compositionHeight={1080}
+          fps={CONFIG.FPS}
+          compositionWidth={CONFIG.COMPOSITION.WIDTH}
+          compositionHeight={CONFIG.COMPOSITION.HEIGHT}
           style={{
             width: '100%',
             height: '100%',
@@ -178,7 +179,7 @@ export const PlayerDemo: React.FC = () => {
           controls
           autoPlay={false}
           initiallyMuted={isMobileOrTablet()}
-          inputProps={{ media }}
+          inputProps={inputProps}
         />
       </div>
     </div>
