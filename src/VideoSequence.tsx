@@ -15,7 +15,7 @@ export interface VideoSequenceProps {
 export const VideoSequence: React.FC<VideoSequenceProps> = ({ media }) => {
   return (
     <AbsoluteFill style={{ backgroundColor: '#000' }}>
-      <Audio src={CONFIG.BACKGROUND_AUDIO_URL} loop />
+      <Audio src={CONFIG.BACKGROUND_AUDIO_URL} loop volume={0.15} />
       {media.map((item, index) => {
         // Calculate when this item starts in the overall sequence
         const startFrame = media
