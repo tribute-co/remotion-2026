@@ -38,4 +38,8 @@ export const CONFIG = {
     PHOTOS_R2: '/photos-r2-proxy',
     ENCODE: '/encode-proxy',
   },
+
+  /** Background audio track URL (loops for the full composition duration) */
+  BACKGROUND_AUDIO_URL:
+    'https://tribute-video-assets.tribute.co/Sailors_Lament_128k.mp3',
 } as const;
