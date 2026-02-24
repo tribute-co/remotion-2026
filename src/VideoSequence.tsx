@@ -1,6 +1,8 @@
-import { AbsoluteFill, Img, Sequence } from 'remotion';
+import { AbsoluteFill, Img, Sequence, useVideoConfig } from 'remotion';
 import { Audio, Video } from '@remotion/media';
+import { useMemo } from 'react';
 import { CONFIG } from './config';
+import { backgroundAudioPlaylist } from './media-schema';
 
 export interface MediaItem {
   type: 'video' | 'image';
@@ -12,10 +14,60 @@ export interface VideoSequenceProps {
   media: MediaItem[];
 }
 
+/** Expand playlist into segments (from, durationInFrames, src) covering totalDurationFrames; repeats sequence as needed */
+function expandBgPlaylist(
+  totalDurationFrames: number,
+  fps: number
+): { from: number; durationInFrames: number; src: string }[] {
+  const tracks = backgroundAudioPlaylist.filter((t) => t.src.trim() !== '');
+  if (tracks.length === 0) return [];
+
+  const segmentDurationsFrames = tracks.map((t) =>
+    Math.ceil(
+      (t.durationInSeconds ?? CONFIG.DEFAULT_BG_AUDIO_TRACK_DURATION_SECONDS) *
+        fps
+    )
+  );
+  const playlistDurationFrames = segmentDurationsFrames.reduce((a, b) => a + b, 0);
+  if (playlistDurationFrames <= 0) return [];
+
+  const segments: { from: number; durationInFrames: number; src: string }[] = [];
+  let currentFrame = 0;
+
+  while (currentFrame < totalDurationFrames) {
+    for (let i = 0; i < tracks.length; i++) {
+      if (currentFrame >= totalDurationFrames) break;
+      const durationInFrames = segmentDurationsFrames[i];
+      segments.push({
+        from: currentFrame,
+        durationInFrames,
+        src: tracks[i].src,
+      });
+      currentFrame += durationInFrames;
+    }
+  }
+
+  return segments;
+}
+
 export const VideoSequence: React.FC<VideoSequenceProps> = ({ media }) => {
+  const { durationInFrames: totalDurationFrames, fps } = useVideoConfig();
+  const bgSegments = useMemo(
+    () => expandBgPlaylist(totalDurationFrames, fps),
+    [totalDurationFrames, fps]
+  );
+
   return (
     <AbsoluteFill style={{ backgroundColor: '#000' }}>
-      <Audio src={CONFIG.BACKGROUND_AUDIO_URL} loop volume={0.15} />
+      {bgSegments.map((seg, i) => (
+        <Sequence
+          key={`bg-${i}-${seg.from}`}
+          from={seg.from}
+          durationInFrames={seg.durationInFrames}
+        >
+          <Audio src={seg.src} volume={0.08} />
+        </Sequence>
+      ))}
       {media.map((item, index) => {
         // Calculate when this item starts in the overall sequence
         const startFrame = media

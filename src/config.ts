@@ -18,6 +18,9 @@ export const CONFIG = {
   /** Default duration for images when not specified */
   DEFAULT_IMAGE_DURATION_SECONDS: 3,
 
+  /** Default duration for a bg audio track when not specified (seconds) */
+  DEFAULT_BG_AUDIO_TRACK_DURATION_SECONDS: 60,
+
   /** Number of frames to premount sequences before they become visible (for preloading) */
   PREMOUNT_FRAMES: 30,
 
@@ -38,8 +41,4 @@ export const CONFIG = {
     PHOTOS_R2: '/photos-r2-proxy',
     ENCODE: '/encode-proxy',
   },
-
-  /** Background audio track URL (loops for the full composition duration) */
-  BACKGROUND_AUDIO_URL:
-    'https://tribute-video-assets.tribute.co/Sailors_Lament_128k.mp3',
 } as const;

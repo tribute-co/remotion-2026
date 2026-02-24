@@ -8,6 +8,18 @@ export interface MediaAsset {
   durationInSeconds?: number; // For images, specify duration. For videos, it's computed.
 }
 
+/** Background audio track for playlist (plays in order, sequence repeats to cover composition) */
+export interface BackgroundAudioTrack {
+  src: string;
+  durationInSeconds?: number; // Optional; fallback used if omitted
+}
+
+/** Playlist of bg audio tracks; played in order and repeated as needed */
+export const backgroundAudioPlaylist: BackgroundAudioTrack[] = [
+  { src: 'https://tribute-video-assets.tribute.co/Sailors_Lament_128k.mp3', durationInSeconds: 188 }, // 3:08
+  { src: 'https://tribute-video-assets.tribute.co/Golden_Days_128k.mp3', durationInSeconds: 187 },   // 3:07
+];
+
 export const mediaAssets: MediaAsset[] = [
   { type: 'video', src: 'https://tribute-production-encode.b-cdn.net/af/14a6d85b3e4726ae8366351ad16032/78983639092__65EC771D-6F73-410F-AC9C-6F6BD4995DCD.mp4' },
   { type: 'video', src: 'https://tribute-production-encode.b-cdn.net/65/6872d38bdf4d62aed3ea6d02905dad/IMG_8496.mp4' },
