@@ -1,8 +1,9 @@
 import { Player, PlayerRef } from '@remotion/player';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CONFIG } from './config';
 import { getMediaUrl } from './get-media-url';
 import { getVideoMetadata } from './get-video-metadata';
+import { Icon } from './icons/registry';
 import { mediaAssets } from './media-schema';
 import { VideoSequence, MediaItem } from './VideoSequence';
 
@@ -99,6 +100,68 @@ export const PlayerDemo: React.FC = () => {
     return { media: media ?? [] };
   }, [media]);
 
+  // Start frame of each asset (for skip prev/next)
+  const assetStartFrames = useMemo(() => {
+    if (!media) return [];
+    const starts: number[] = [0];
+    let acc = 0;
+    for (let i = 0; i < media.length; i++) {
+      acc += media[i].durationInFrames;
+      starts.push(acc);
+    }
+    return starts;
+  }, [media]);
+
+  const skipToPreviousAsset = useCallback(() => {
+    const frame = playerRef.current?.getCurrentFrame() ?? 0;
+    let index = 0;
+    for (let i = assetStartFrames.length - 1; i >= 0; i--) {
+      if (frame >= assetStartFrames[i]) {
+        index = i;
+        break;
+      }
+    }
+    const prevIndex = Math.max(0, index - 1);
+    playerRef.current?.seekTo(assetStartFrames[prevIndex]);
+  }, [assetStartFrames]);
+
+  const skipToNextAsset = useCallback(() => {
+    const frame = playerRef.current?.getCurrentFrame() ?? 0;
+    let index = 0;
+    for (let i = assetStartFrames.length - 1; i >= 0; i--) {
+      if (frame >= assetStartFrames[i]) {
+        index = i;
+        break;
+      }
+    }
+    const nextIndex = Math.min(assetStartFrames.length - 2, index + 1);
+    playerRef.current?.seekTo(assetStartFrames[nextIndex]);
+  }, [assetStartFrames]);
+
+  const [currentFrame, setCurrentFrame] = useState(0);
+  useEffect(() => {
+    const el = playerRef.current;
+    if (!el) return;
+    const onFrameUpdate = () => setCurrentFrame(el.getCurrentFrame());
+    el.addEventListener('frameupdate', onFrameUpdate);
+    setCurrentFrame(el.getCurrentFrame());
+    return () => el.removeEventListener('frameupdate', onFrameUpdate);
+  }, [totalDuration, media]);
+  const currentAssetIndex = (() => {
+    if (!media?.length || !assetStartFrames.length) return 0;
+    let index = 0;
+    for (let i = assetStartFrames.length - 1; i >= 0; i--) {
+      if (currentFrame >= assetStartFrames[i]) {
+        index = Math.min(i, media.length - 1);
+        break;
+      }
+    }
+    return index;
+  })();
+
+  const canGoPrev = currentAssetIndex > 0;
+  const canGoNext = media ? currentAssetIndex < media.length - 1 : false;
+
   const containerStyle: React.CSSProperties = {
     display: 'flex',
     flexDirection: 'column',
@@ -166,7 +229,7 @@ export const PlayerDemo: React.FC = () => {
       >
         <Player
           ref={playerRef}
-          component={VideoSequence}
+          component={VideoSequence as unknown as React.ComponentType<Record<string, unknown>>}
           durationInFrames={totalDuration}
           fps={CONFIG.FPS}
           compositionWidth={CONFIG.COMPOSITION.WIDTH}
@@ -181,6 +244,57 @@ export const PlayerDemo: React.FC = () => {
           initiallyMuted={isMobileOrTablet()}
           inputProps={inputProps}
         />
+      </div>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '1rem',
+          marginTop: '1rem',
+        }}
+      >
+        <button
+          type="button"
+          aria-label="Previous asset"
+          onClick={skipToPreviousAsset}
+          disabled={!canGoPrev}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '0.5rem 1rem',
+            background: canGoPrev ? '#333' : '#222',
+            color: canGoPrev ? '#fff' : '#666',
+            border: 'none',
+            borderRadius: '8px',
+            cursor: canGoPrev ? 'pointer' : 'not-allowed',
+          }}
+        >
+          <Icon name="arrow-left" size={20} />
+        </button>
+        <span style={{ fontSize: '0.9rem', color: '#999' }}>
+          {currentAssetIndex + 1} / {media.length}
+        </span>
+        <button
+          type="button"
+          aria-label="Next asset"
+          onClick={skipToNextAsset}
+          disabled={!canGoNext}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '0.5rem 1rem',
+            background: canGoNext ? '#333' : '#222',
+            color: canGoNext ? '#fff' : '#666',
+            border: 'none',
+            borderRadius: '8px',
+            cursor: canGoNext ? 'pointer' : 'not-allowed',
+          }}
+        >
+          <Icon name="arrow-right" size={20} />
+        </button>
       </div>
     </div>
   );
