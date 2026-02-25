@@ -297,9 +297,9 @@ export const PlayerDemo: React.FC = () => {
     <div style={containerStyle}>
       <div
         style={{
+          height: '100%',
+          width: 'auto',
           maxWidth: '1280px',
-          width: '100%',
-          aspectRatio: '16/9',
           borderRadius: '12px',
           overflow: 'hidden',
           boxShadow: '0 20px 60px rgba(0, 0, 0, 0.5)',
@@ -315,6 +315,7 @@ export const PlayerDemo: React.FC = () => {
           style={{
             width: '100%',
             height: '100%',
+            aspectRatio: '16/9',
             outline: 'none',
           }}
           controls
