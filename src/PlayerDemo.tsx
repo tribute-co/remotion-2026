@@ -162,6 +162,84 @@ export const PlayerDemo: React.FC = () => {
   const canGoPrev = currentAssetIndex > 0;
   const canGoNext = media ? currentAssetIndex < media.length - 1 : false;
 
+  // Keyboard: single press = prev/next asset; press-and-hold = scrub
+  const holdTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scrubIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const keyHoldRef = useRef(false);
+
+  const HOLD_THRESHOLD_MS = 400;
+  const SCRUB_INTERVAL_MS = 80;
+  const SCRUB_STEP_FRAMES = 30; // ~1 sec at 30fps
+
+  useEffect(() => {
+    if (!totalDuration || !media) return;
+
+    const clearHold = () => {
+      if (holdTimeoutRef.current) {
+        clearTimeout(holdTimeoutRef.current);
+        holdTimeoutRef.current = null;
+      }
+      if (scrubIntervalRef.current) {
+        clearInterval(scrubIntervalRef.current);
+        scrubIntervalRef.current = null;
+      }
+    };
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.repeat) return;
+      const target = e.target as Node;
+      if (
+        target &&
+        typeof (target as HTMLElement).closest === 'function' &&
+        (target as HTMLElement).closest('input, textarea, [contenteditable="true"]')
+      ) {
+        return;
+      }
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        keyHoldRef.current = false;
+        holdTimeoutRef.current = setTimeout(() => {
+          holdTimeoutRef.current = null;
+          keyHoldRef.current = true;
+          scrubIntervalRef.current = setInterval(() => {
+            const frame = playerRef.current?.getCurrentFrame() ?? 0;
+            playerRef.current?.seekTo(Math.max(0, frame - SCRUB_STEP_FRAMES));
+          }, SCRUB_INTERVAL_MS);
+        }, HOLD_THRESHOLD_MS);
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        keyHoldRef.current = false;
+        holdTimeoutRef.current = setTimeout(() => {
+          holdTimeoutRef.current = null;
+          keyHoldRef.current = true;
+          scrubIntervalRef.current = setInterval(() => {
+            const frame = playerRef.current?.getCurrentFrame() ?? 0;
+            playerRef.current?.seekTo(Math.min(totalDuration - 1, frame + SCRUB_STEP_FRAMES));
+          }, SCRUB_INTERVAL_MS);
+        }, HOLD_THRESHOLD_MS);
+      }
+    };
+
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      const wasHolding = keyHoldRef.current;
+      clearHold();
+      keyHoldRef.current = false;
+      if (wasHolding) return;
+      e.preventDefault();
+      if (e.key === 'ArrowLeft') skipToPreviousAsset();
+      else if (e.key === 'ArrowRight') skipToNextAsset();
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    return () => {
+      clearHold();
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+    };
+  }, [totalDuration, media, skipToPreviousAsset, skipToNextAsset]);
+
   const containerStyle: React.CSSProperties = {
     display: 'flex',
     flexDirection: 'column',
