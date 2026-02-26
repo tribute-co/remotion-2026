@@ -8,6 +8,10 @@ export interface MediaItem {
   type: 'video' | 'image';
   src: string;
   durationInFrames: number;
+  /** Trim from start (frames); used with Remotion Video trimBefore */
+  trimBeforeFrames?: number;
+  /** Trim from end (frames); used with Remotion Video trimAfter */
+  trimAfterFrames?: number;
 }
 
 export interface VideoSequenceProps {
@@ -65,7 +69,7 @@ export const VideoSequence: React.FC<VideoSequenceProps> = ({ media }) => {
           from={seg.from}
           durationInFrames={seg.durationInFrames}
         >
-          <Audio src={seg.src} volume={0.08} />
+          <Audio src={seg.src} volume={CONFIG.BG_AUDIO_VOLUME} />
         </Sequence>
       ))}
       {media.map((item, index) => {
@@ -85,6 +89,8 @@ export const VideoSequence: React.FC<VideoSequenceProps> = ({ media }) => {
               {item.type === 'video' ? (
                 <Video
                   src={item.src}
+                  trimBefore={item.trimBeforeFrames}
+                  trimAfter={item.trimAfterFrames}
                   style={{
                     width: '100%',
                     height: '100%',

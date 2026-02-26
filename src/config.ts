@@ -21,6 +21,9 @@ export const CONFIG = {
   /** Default duration for a bg audio track when not specified (seconds) */
   DEFAULT_BG_AUDIO_TRACK_DURATION_SECONDS: 60,
 
+  /** Background music volume (0–1); 0.075 = 7.5% */
+  BG_AUDIO_VOLUME: 0.075,
+
   /** Number of frames to premount sequences before they become visible (for preloading) */
   PREMOUNT_FRAMES: 30,
 

@@ -2,10 +2,16 @@
 
 export type MediaType = 'video' | 'image';
 
+/**
+ * Trim: [startTrimSeconds, endPlayToSeconds]
+ * - startTrimSeconds: seconds to trim from the start (0 = none)
+ * - endPlayToSeconds: play up to this time; remainder is trimmed from the end
+ */
 export interface MediaAsset {
   type: MediaType;
   src: string;
   durationInSeconds?: number; // For images, specify duration. For videos, it's computed.
+  trim?: [number, number];
 }
 
 /** Background audio track for playlist (plays in order, sequence repeats to cover composition) */
@@ -21,13 +27,13 @@ export const backgroundAudioPlaylist: BackgroundAudioTrack[] = [
 ];
 
 export const mediaAssets: MediaAsset[] = [
-  { type: 'video', src: 'https://tribute-production-encode.b-cdn.net/af/14a6d85b3e4726ae8366351ad16032/78983639092__65EC771D-6F73-410F-AC9C-6F6BD4995DCD.mp4' },
+  { type: 'video', src: 'https://tribute-production-encode.b-cdn.net/af/14a6d85b3e4726ae8366351ad16032/78983639092__65EC771D-6F73-410F-AC9C-6F6BD4995DCD.mp4', trim: [0, 10] },
   { type: 'video', src: 'https://tribute-production-encode.b-cdn.net/65/6872d38bdf4d62aed3ea6d02905dad/IMG_8496.mp4' },
   { type: 'image', src: 'https://photos-r2.tribute.co/414c28c9671848c096b2ec63c33e9142/0a554270e98e4ff58b5e86e7d984018b.jpg', durationInSeconds: 6 },
   { type: 'image', src: 'https://photos-r2.tribute.co/8e7ea6f186a14266a9b4dbc9f5554d72/07b3520c4b4448e4a94a210f6ea3638c.jpg', durationInSeconds: 9 },
   { type: 'image', src: 'https://photos-r2.tribute.co/3bf0fae16f0d4fdcaef2398515779003/130c993c57c648c7b596f05147c5a844.jpg', durationInSeconds: 10 },
   { type: 'image', src: 'https://photos-r2.tribute.co/8e7ea6f186a14266a9b4dbc9f5554d72/11adfcd4c87e497ea4d13e91e7076952.jpg', durationInSeconds: 8 },
-  { type: 'video', src: 'https://tribute-production-encode.b-cdn.net/28/003a980dc644bdb2329dcb2009f7da/IMG_6037.mp4' },
+  { type: 'video', src: 'https://tribute-production-encode.b-cdn.net/28/003a980dc644bdb2329dcb2009f7da/IMG_6037.mp4', trim: [0, 45] },
   { type: 'image', src: 'https://photos-r2.tribute.co/b28bac8a8366423b8f08328bbd80b4d7/21b3afe0865a4e86ae2eeaffaca0893a.jpg', durationInSeconds: 6 },
   { type: 'video', src: 'https://tribute-production-encode.b-cdn.net/6e/a57e2265094addba4d4af746ecb286/memoriesofliz-1-.mp4' },
   { type: 'image', src: 'https://photos-r2.tribute.co/1c2788b2864b4057881420bd2da48fa2/1ea8b6fed16a45cb99479dec7de75af8.jpg', durationInSeconds: 6 },

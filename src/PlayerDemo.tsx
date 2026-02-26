@@ -24,10 +24,21 @@ async function calculateMediaDurations(fps: number): Promise<MediaItem[]> {
   return Promise.all(
     proxiedAssets.map(async (asset) => {
       let durationInFrames: number;
+      let trimBeforeFrames: number | undefined;
+      let trimAfterFrames: number | undefined;
 
       if (asset.type === 'video') {
         const metadata = await getVideoMetadata(asset.src);
-        durationInFrames = Math.ceil(metadata.durationInSeconds * fps);
+        const durationInSeconds = metadata.durationInSeconds;
+
+        if (asset.trim) {
+          const [startTrimSeconds, endPlayToSeconds] = asset.trim;
+          trimBeforeFrames = Math.round(startTrimSeconds * fps);
+          trimAfterFrames = Math.round((durationInSeconds - endPlayToSeconds) * fps);
+          durationInFrames = Math.ceil((endPlayToSeconds - startTrimSeconds) * fps);
+        } else {
+          durationInFrames = Math.ceil(durationInSeconds * fps);
+        }
       } else {
         durationInFrames = Math.ceil((asset.durationInSeconds ?? CONFIG.DEFAULT_IMAGE_DURATION_SECONDS) * fps);
       }
@@ -36,6 +47,8 @@ async function calculateMediaDurations(fps: number): Promise<MediaItem[]> {
         type: asset.type,
         src: asset.src,
         durationInFrames: Math.max(durationInFrames, CONFIG.MIN_DURATION_FRAMES),
+        ...(trimBeforeFrames !== undefined && { trimBeforeFrames }),
+        ...(trimAfterFrames !== undefined && { trimAfterFrames }),
       };
     })
   );
