@@ -49,6 +49,7 @@ async function calculateMediaDurations(fps: number): Promise<MediaItem[]> {
         durationInFrames: Math.max(durationInFrames, CONFIG.MIN_DURATION_FRAMES),
         ...(trimBeforeFrames !== undefined && { trimBeforeFrames }),
         ...(trimAfterFrames !== undefined && { trimAfterFrames }),
+        ...(asset.type === 'video' && asset.volume !== undefined && { volume: asset.volume }),
       };
     })
   );

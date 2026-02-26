@@ -12,6 +12,8 @@ export interface MediaItem {
   trimBeforeFrames?: number;
   /** Trim from end (frames); used with Remotion Video trimAfter */
   trimAfterFrames?: number;
+  /** Video-only: volume (0–1 or >1 for boost). Omit = 1. */
+  volume?: number;
 }
 
 export interface VideoSequenceProps {
@@ -91,6 +93,10 @@ export const VideoSequence: React.FC<VideoSequenceProps> = ({ media }) => {
                   src={item.src}
                   trimBefore={item.trimBeforeFrames}
                   trimAfter={item.trimAfterFrames}
+                  volume={item.volume ?? 1}
+                  {...(item.volume !== undefined && item.volume > 1
+                    ? { useWebAudioApi: true as const, crossOrigin: 'anonymous' as const }
+                    : {})}
                   style={{
                     width: '100%',
                     height: '100%',
